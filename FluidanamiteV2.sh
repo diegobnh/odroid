@@ -41,7 +41,11 @@ if [ $FLAG_PARSEC3 == 'True' ]; then
 
                   #all simlarge input:
                   case $j in
-			0) printf "\n-- Running fluidanimate--\n Config:${CPU_LIST[$i]}\n"; $TIME_COMMAND ./fluidanimate ${NUM_THREADS[$i]} 500 ../../../inputs/in_500K.fluid out.fluid & pid_app=$!;;
+			0) printf "\n-- Running fluidanimate-- Config:${CPU_LIST[$i]}\n\n"; 
+                           if [[ "${NUM_THREADS[$i]}" == "1" || "${NUM_THREADS[$i]}" == "2" || "${NUM_THREADS[$i]}" == "4" || "${NUM_THREADS[$i]}" == "8" ]]
+                           then $TIME_COMMAND ./fluidanimate ${NUM_THREADS[$i]} 500 ../../../inputs/in_500K.fluid out.fluid & pid_app=$!
+                           fi ;;
+
 	
 			*) echo "INVALID NUMBER!" ;;
 		  esac 
