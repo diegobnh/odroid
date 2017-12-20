@@ -29,30 +29,30 @@ FLAG_PARSEC3="True"
 if [ $FLAG_PARSEC3 == 'True' ]; then
 	for tf in `echo $THREAD_FACTOR`
         do  
-	  for ((i = 0; i < ${#CPU_LIST[@]}; i++));
+          for ((i=${#CPU_LIST[@]}-1 ; i>=0 ; i-- )) ;     
+	  #for ((i = 0; i < ${#CPU_LIST[@]}; i++));
           do             
              cd $PARSEC3_BENCHMARK_FOLDER   #Path to all benchmarks
              for ((j = 0; j < ${#APP_PARSEC3[@]}; j++)); do
 	          cd  ${APP_PARSEC3[$j]} #Path specific benchmark
                   
-
                   #all simlarge input:
                   case $j in
-			0) printf "\n-- Running fluidanimate--\n\n"; $TIME_COMMAND ./fluidanimate $NUM_THREADS 500 ../../../inputs/in_500K.fluid out.fluid & pid_app=$!;;
+			0) printf "\n-- Running fluidanimate--\n Config: ${CPU_LIST[$i]} \n"; $TIME_COMMAND taskset -a -c ${CPU_LIST[$i]} perf stat -o /tmp/perf.out -e instructions,cycles,cache-misses,cache-references,branches,branch-misses ./fluidanimate ${NUM_THREADS[$i]} 500 ../../../inputs/in_500K.fluid out.fluid ;; #& pid_app=$!;;
 	
 			*) echo "INVALID NUMBER!" ;;
 		  esac 
 
-                  sleep 1;
-          	  taskset -a -cp ${CPU_LIST[$i]} $pid_app
-	          perf stat -o /tmp/perf.out -e instructions,cycles,cache-misses,cache-references,branches,branch-misses -p $pid_app & pid_perf=$!  #desempenho sumarizado!
+                  #sleep 1;
+          	  #taskset -a -cp ${CPU_LIST[$i]} $pid_app
+	          #perf stat -o /tmp/perf.out -e instructions,cycles,cache-misses,cache-references,branches,branch-misses -p $pid_app & pid_perf=$!  #desempenho sumarizado!
 
 
-           	  wait $pid_app
-                  kill $pid_perf
+           	  #wait $pid_app
+                  #kill $pid_perf
                   
-                  sleep 2
-                  kill -9 $pid_perf 1> /dev/null 2>/dev/null 
+                  #sleep 2
+                  #kill -9 $pid_perf 1> /dev/null 2>/dev/null 
                   
             
                   if [ -f "/tmp/perf.out" ]
