@@ -28,9 +28,6 @@ if [ $FLAG_PARSEC3 == 'True' ]; then
 
           # start power monitor
           #sudo ~/wattsup/wattsup -t ttyUSB0 watts > /tmp/power.out & pid_power=$!
-
-          # start perf monitor (needs sudo)
-          sudo perf stat -a --per-core -o /tmp/perf.out -I 1000 & pid_perf=$!
          
           case $j in
 		0) ./blackscholes 8 in_4K.txt /tmp/temp.out & pid_app=$!;;
@@ -54,16 +51,23 @@ if [ $FLAG_PARSEC3 == 'True' ]; then
 		*) echo "INVALID NUMBER!" ;;
 	   esac 
 
-           sleep 1;
+#           sleep 1;
            taskset -a -cp 0-3,4-7 $pid_app
+          # start perf monitor (needs sudo)
+           perf stat --per-thread -o /tmp/perf.out -I 200 -p $pid_app & pid_perf=$!
+
            wait $pid_app
 
+           kill $pid_perf
+           #kill $pid_power
+
+           sleep 2
+           kill -9 $pid_perf 1> /dev/null 2>/dev/null 
+            
            mv /tmp/perf.out /tmp/perf_${APP_PARSEC3_NAMES[$j]}.txt
            cd ../../../../../
                
-           kill $pid_perf
-           #kill $pid_power 
-           sleep 20
+           sleep 15
      done
 fi
 
