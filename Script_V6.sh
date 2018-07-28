@@ -9,7 +9,7 @@ else
 fi 
 
 
-PERF_COMMAND="perf stat -o /tmp/perf.out -I 200 -e instructions,cycles,cache-misses,cache-references,branches,branch-misses"
+PERF_COMMAND="perf stat -o /tmp/perf.out -e instructions,cycles,cache-misses,cache-references,branches,branch-misses"
 TIME_COMMAND="/usr/bin/time -p -o /tmp/time.out"
 
 
