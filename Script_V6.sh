@@ -28,11 +28,11 @@ FLAG_PARSEC3="False"
 ##################################################SPLASH-3#############################################################
 
 SPLASH3_BENCHMARK_FOLDER=~/diego/benchmarks/Splash-3-master/codes/
-#APP_SPLASH3=("apps/ocean" "apps/radiosity" "apps/raytrace" "apps/volrend" "kernels/lu" "kernels/lu" "kernels/radix")
-APP_SPLASH3=("apps/ocean")
+APP_SPLASH3=("apps/radiosity" "apps/raytrace" "apps/volrend" "kernels/lu" "kernels/lu" "kernels/radix")
+#APP_SPLASH3=("apps/ocean")
 
-#APP_SPLASH3_NAMES=("ocean contiguous" "radiosity" "raytrace" "volrend" "lu contiguous" "lu nocontiguous" "radix")
-APP_SPLASH3_NAMES=("ocean contiguous")
+APP_SPLASH3_NAMES=("radiosity" "raytrace" "volrend" "lu contiguous" "lu nocontiguous" "radix")
+#APP_SPLASH3_NAMES=("ocean contiguous")
 FLAG_SPLASH3="True"
 
 
