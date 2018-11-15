@@ -11,7 +11,7 @@ NUM_THREADS=("8")
 #ITERACOES="1 2 3 4 5"
 ITERACOES="1"
 
-rm *.log *.txt
+#rm *.log *.txt
 
 
 for ((j = 0; j < ${#CPU_LIST[@]}; j++));
@@ -49,25 +49,41 @@ do
     do
         
      echo "Executing Config "${CPU_LIST[$i]}
-     sudo taskset -a -c ${CPU_LIST[$i]} /home/odroid/meabo/./meabo.armv7 -C ${NUM_THREADS[$i]} -r 8192 -c 8192 -s 524288 -l 1048576 -p 524288 -R 1048576 &
+     #sudo taskset -a -c ${CPU_LIST[$i]} /home/odroid/meabo/./meabo.armv7 -C ${NUM_THREADS[$i]} -r 8192 -c 8192 -s 524288 -l 1048576 -p 524288 -R 1048576 &
      #sudo taskset -a -c ${CPU_LIST[$i]} /home/odroid/meabo/./meabo.armv7 -C ${NUM_THREADS[$i]} -r 4096 -c 4096 -s 262144 -l 4194304 -p 262144 -R 524288 &
-     PidMeabo=`pgrep -f meabo`
+     sudo taskset -a -c ${CPU_LIST[$i]} /home/odroid/meabo/./meabo.armv7 -C ${NUM_THREADS[$i]} -r 4096 -c 4096 -s 262144 -l 4194304 -p 262144 -R 524288
+     PID_MEABO=$!
+     echo "MEABO="$PID_MEABO
 
-	sudo ./Status.sh $PidMeabo &	
-	grabserial -T -d /dev/ttyUSB0  >> Power2.log & 
+#     sleep 1
+#     PidMeabo1=`pgrep meabo`
+#     PidMeabo2=`pgrep -f meabo`
+#     PidMeabo3=`pgrep -n meabo`
+#     echo "PidMeabo="$PidMeabo3
+#     echo "pidapp="$pid_app
+     sudo ./Status.sh $pid_app &	
+     PID_STATUS=$!
+     echo "STATUS="$PID_STATUS
 
-	PidPower=`pgrep -f grabserial`
 
-	echo "Pid Meabo="$PidMeabo
-	echo "Pid Power="$PidPower
+     grabserial -T -d /dev/ttyUSB0  >> Power2.log & 
+     PID_GRABSERIAL=$!
+     echo "GRANSERIAL="$PID_GRABSERIAL
 
-	wait $PidMeabo
+#     PidPower1=`pgrep grabserial`
+#     PidPower2=`pgrep -f grabserial`
+#     PidPower3=`pgrep -n grabserial`
+#     echo "Power Power1="$PidPower1" Pid Power2="$PidPower2" Pid Power 3="$PidPower3
 
-	echo "Killing Power"
-	sudo kill -9 $PidPower
-	
-	echo "Killing Status"
-	sudo pkill Status
+#     echo "Esperando o fim do meabo"
+     wait $PID_MEABO
+     echo "Terminou PidMeabo!!"
+
+#     echo "Killing Power"
+     #sudo kill -9 $PidPower3
+     sudo pkill grabserial
+     echo "Killing Status"
+     sudo pkill Status
 
      sleep 3
 
@@ -75,6 +91,7 @@ do
      cd ${CPU_LIST[$i]}
      mv *.* $it
      cd ..        
+     echo "FIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIM"
    done
 done
 
