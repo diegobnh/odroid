@@ -2,10 +2,14 @@
 
 sudo ./CPU_governor_performance.sh
 
-CPU_LIST=("0-3,4-7" "0-1,4-5" "4-7" "0-3")
-#CPU_LIST=("0-3,4-7")
-NUM_THREADS=("8" "4" "4" "4")
-#NUM_THREADS=("8")
+#CPU_LIST=("0-3,4-7" "0-3,4-7" "0-1,4-5" "0-1,4-5" "4-7" "4-7" "0-3" "0-3")
+#NUM_THREADS=("8" "16" "4" "8" "4" "8" "4" "8")
+
+
+CPU_LIST=("0-3,4-7" "0-1,4-5" "0-3")
+NUM_THREADS=("12" "6" "6")
+
+
 #ITERACOES="1 2 3 4 5"
 ITERACOES="1"
 APP_BOTS=("nqueens" "uts" "health" "floorplan" "alignment" "fft" "fib" "sort" "sparselu" "strassen")
@@ -104,8 +108,8 @@ do
 		 esac
 
                  echo " "
-                 echo "Pid passado ao script status="$PidName
-		 grabserial -T -d /dev/ttyUSB0  >> "Power_"${APP_BOTS[$j]}"_"${CPU_LIST[$i]}".log" & 
+                 echo "PidName passado ao script status="$PidName
+		 grabserial -T -d /dev/ttyUSB0  >> "Power_"${APP_BOTS[$j]}"_"${NUM_THREADS[$i]}"_"${CPU_LIST[$i]}".log" & 
                  sudo ./Status.sh $PidName  & 
 
                  sleep 2
@@ -118,10 +122,8 @@ do
                  sudo pkill Status
 		 sleep 3
 
-
-                 mv Stat.log ${APP_BOTS[$j]}"_Stat.log"
-
-	         mv *.log ${CPU_LIST[$i]}
+		 mv Stat.log "Status_"${APP_BOTS[$j]}"_"${NUM_THREADS[$i]}"_"${CPU_LIST[$i]}".stat"
+	         mv *.log *.stat  ${CPU_LIST[$i]}
                  cd ${CPU_LIST[$i]}
 		 mv *.* ${it}
                  cd ..
