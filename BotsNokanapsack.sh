@@ -2,12 +2,12 @@
 
 sudo ./CPU_governor_performance.sh
 
-#CPU_LIST=("0-3,4-7" "0-3,4-7" "0-1,4-5" "0-1,4-5" "4-7" "4-7" "0-3" "0-3")
-#NUM_THREADS=("8" "16" "4" "8" "4" "8" "4" "8")
+CPU_LIST=("0-3,4-7" "0-3,4-7" "0-3,4-7" "0-1,4-5" "0-1,4-5" "0-1,4-5" "4-7" "4-7" "0-3" "0-3" "0-3")
+NUM_THREADS=("8" "12" "16" "4" "6" "8" "4" "8" "4" "6" "8")
 
 
-CPU_LIST=("0-3,4-7" "0-1,4-5" "0-3")
-NUM_THREADS=("12" "6" "6")
+#CPU_LIST=("0-3,4-7" "0-1,4-5" "0-3")
+#NUM_THREADS=("12" "6" "6")
 
 
 #ITERACOES="1 2 3 4 5"
@@ -15,19 +15,23 @@ ITERACOES="1"
 APP_BOTS=("nqueens" "uts" "health" "floorplan" "alignment" "fft" "fib" "sort" "sparselu" "strassen")
 #APP_BOTS=("nqueens" "uts")
 
-#Essa primeira parte vai criar pastas e subpastas para armzenar as saidas , já que elas posuem os mesmos nomes.
+#Essa primeira parte vai criar pastas e subpastas para armazenar as saidas , já que elas posuem os mesmos nomes.
 
 for ((j = 0; j < ${#CPU_LIST[@]}; j++));
 do
   if [ -d ${CPU_LIST[$j]} ];then           
+      rm -r ${CPU_LIST[$j]}
+      mkdir ${CPU_LIST[$j]}
+      echo "Criando o Folder "${CPU_LIST[$j]}
       cd ${CPU_LIST[$j]}
       for it in `echo $ITERACOES`
       do
+        mkdir $it
         cd $it
-        files=$(ls 2> /dev/null | wc -l)
-        if [ "$files" != "0" ]; then
-             rm *.*
-        fi
+        for ((k = 0; k < ${#APP_BOTS[@]}; k++));
+	   do
+             mkdir ${APP_BOTS[$k]}
+        done
         cd ..
       done
       cd ..
@@ -38,6 +42,12 @@ do
       for it in `echo $ITERACOES`
       do
         mkdir $it
+        cd $it
+        for ((k = 0; k < ${#APP_BOTS[@]}; k++));
+	   do
+             mkdir ${APP_BOTS[$k]}
+        done
+        cd ..
       done
       cd ..
   fi
@@ -109,7 +119,7 @@ do
 
                  echo " "
                  echo "PidName passado ao script status="$PidName
-		 grabserial -T -d /dev/ttyUSB0  >> "Power_"${APP_BOTS[$j]}"_"${NUM_THREADS[$i]}"_"${CPU_LIST[$i]}".log" & 
+		 grabserial -T -d /dev/ttyUSB0  >> "Power_"${APP_BOTS[$j]}"_"${CPU_LIST[$i]}"_"${NUM_THREADS[$i]}".log" & 
                  sudo ./Status.sh $PidName  & 
 
                  sleep 2
@@ -122,11 +132,13 @@ do
                  sudo pkill Status
 		 sleep 3
 
-		 mv Stat.log "Status_"${APP_BOTS[$j]}"_"${NUM_THREADS[$i]}"_"${CPU_LIST[$i]}".stat"
+		 mv Stat.log "Status_"${APP_BOTS[$j]}"_"${CPU_LIST[$i]}"_"${NUM_THREADS[$i]}".stat"
 	         mv *.log *.stat  ${CPU_LIST[$i]}
                  cd ${CPU_LIST[$i]}
 		 mv *.* ${it}
-                 cd ..
+                 cd ${it}
+                 mv *.* ${APP_BOTS[$j]}
+                 cd ../..
 
 	  done #Fim do for que controla a execução de cada aplicação
 	done #Fim do for que ocntrole os diferentes configs para executar
