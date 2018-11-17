@@ -3,6 +3,7 @@
 sudo ./CPU_governor_performance.sh
 
 CPU_LIST=("0-3,4-7" "0-3,4-7" "0-3,4-7" "0-1,4-5" "0-1,4-5" "0-1,4-5" "4-7" "4-7" "0-3" "0-3" "0-3")
+CONFIG=("4B4L" "4B4L" "4B4L" "2B2L" "2B2L" "2B2L" "0B4L" "0B4L" "4L0B" "4L0B" "4L0B")
 NUM_THREADS=("8" "12" "16" "4" "6" "8" "4" "8" "4" "6" "8")
 
 
@@ -17,51 +18,28 @@ APP_BOTS=("nqueens" "uts" "health" "floorplan" "alignment" "fft" "fib" "sort" "s
 
 #Essa primeira parte vai criar pastas e subpastas para armazenar as saidas , já que elas posuem os mesmos nomes.
 
-for ((j = 0; j < ${#CPU_LIST[@]}; j++));
+for ((j = 0; j < ${#APP_BOTS[@]}; j++));
 do
-  if [ -d ${CPU_LIST[$j]} ];then           
-      rm -r ${CPU_LIST[$j]}
-      mkdir ${CPU_LIST[$j]}
-      echo "Criando o Folder "${CPU_LIST[$j]}
-      cd ${CPU_LIST[$j]}
-      for it in `echo $ITERACOES`
-      do
-        mkdir $it
-        cd $it
-        for ((k = 0; k < ${#APP_BOTS[@]}; k++));
-	   do
-             mkdir ${APP_BOTS[$k]}
-        done
-        cd ..
-      done
-      cd ..
-  else
-      mkdir ${CPU_LIST[$j]}
-      echo "Criando o Folder "${CPU_LIST[$j]}
-      cd ${CPU_LIST[$j]}
-      for it in `echo $ITERACOES`
-      do
-        mkdir $it
-        cd $it
-        for ((k = 0; k < ${#APP_BOTS[@]}; k++));
-	   do
-             mkdir ${APP_BOTS[$k]}
-        done
-        cd ..
-      done
-      cd ..
+  if [ -d ${APP_BOTS[$j]} ];then           
+      rm -r ${APP_BOTS[$j]}
   fi
+  mkdir ${APP_BOTS[$j]}
+  for it in `echo $ITERACOES`
+  do
+     mkdir $it
+     cd ..
+  done
 done
-
+      
 
 #Essa segunda etapa executa as aplcaçoes do Bots de modo que o número de threads seja igual ao número de cores disponibilizados.
 
 for it in `echo $ITERACOES`
 do
      echo "Iteracao "$it
-	for ((i = 0; i < ${#CPU_LIST[@]}; i++));
+	for ((j = 0; j < ${#APP_BOTS[@]}; j++));
 	do
-	  for ((j = 0; j < ${#APP_BOTS[@]}; j++));
+	  for ((i = 0; i < ${#CPU_LIST[@]}; i++));
 	  do
 		case $j in
 				0) printf "\n-- Running ${APP_BOTS[$j]} -- Config:${CPU_LIST[$i]}\n\n";
@@ -117,28 +95,26 @@ do
 				*) echo "INVALID NUMBER!";;
 		 esac
 
-                 echo " "
-                 echo "PidName passado ao script status="$PidName
-		 grabserial -T -d /dev/ttyUSB0  >> "Power_"${APP_BOTS[$j]}"_"${CPU_LIST[$i]}"_"${NUM_THREADS[$i]}".log" & 
-                 sudo ./Status.sh $PidName  & 
+           #echo " "
+           #echo "PidName passado ao script status="$PidName
+		 grabserial -T -d /dev/ttyUSB0  >> "Power_"${APP_BOTS[$j]}"_"${CPU_LIST[$i]}"_"${NUM_THREADS[$i]}".power" & 
+           sudo ./Status.sh $PidName  & 
 
-                 sleep 2
+           sleep 2
 		 PidPower=`pgrep -f grabserial` 
-                 PidStatus=`pgrep -n Status`
-                 echo "PidPower="$PidPower" PidStatus="$PidStatus
+           PidStatus=`pgrep -n Status`
+           echo "PidPower="$PidPower" PidStatus="$PidStatus
 		 wait $pid_app
-		 #echo " "
+		 
 		 sudo pkill grabserial
-                 sudo pkill Status
+           sudo pkill Status
 		 sleep 3
 
-		 mv Stat.log "Status_"${APP_BOTS[$j]}"_"${CPU_LIST[$i]}"_"${NUM_THREADS[$i]}".stat"
-	         mv *.log *.stat  ${CPU_LIST[$i]}
-                 cd ${CPU_LIST[$i]}
+		 mv Stat.log ${CONFIG[$j]}"_"${NUM_THREADS[$i]}".stat"
+	      mv *.power *.stat  ${APP_BOTS[$i]}
+           cd ${APP_BOTS[$i]}
 		 mv *.* ${it}
-                 cd ${it}
-                 mv *.* ${APP_BOTS[$j]}
-                 cd ../..
+           cd ..
 
 	  done #Fim do for que controla a execução de cada aplicação
 	done #Fim do for que ocntrole os diferentes configs para executar
