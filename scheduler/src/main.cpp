@@ -255,7 +255,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    const auto command = std::getenv("SCHED_COMMAND");
+    //const auto command = std::getenv("SCHED_COMMAND");
+    const auto command = "python3 ./dumb-scheduler.py";
     if(!command)
     {
         fprintf(stderr, "scheduler: please specify the scheduler command "
