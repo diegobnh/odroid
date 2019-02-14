@@ -22,7 +22,7 @@ enum State
 };
 
 static State current_state = STATE_BL;
-static float current_state_mips = 0.0;
+static double current_state_mips = 0.0;
 
 static void send_to_scheduler(const char* fmt, ...)
 {
@@ -198,12 +198,12 @@ static void update_scheduler()
         total_branch_miss += hw_data.branch_misses;
     }
 
-    float mkpi = float(total_cache_miss) / float(total_instructions * 1000.0);
-    float bmiss = float(total_branch_miss) / float(total_branch_inst);
-    float ipc = float(total_instructions) / float(total_cycles);
+    double mkpi = ((double)(total_cache_miss) / (double)(total_instructions)) * 1000.0;
+    double bmiss = double(total_branch_miss) / double(total_branch_inst);
+    double ipc = double(total_instructions) / double(total_cycles);
 
     State next_state = current_state;
-    float next_state_mips = 0.0;
+    double next_state_mips = 0.0;
 
     for(int i = 0; i <= 2; ++i)
     {
@@ -212,9 +212,9 @@ static void update_scheduler()
         const bool has_big = (i == STATE_BL || i == STATE_B);
         const bool has_little = (i == STATE_BL || i == STATE_L);
 
-        float expected_mips;
-        send_to_scheduler("%f %f %f %d %d", mkpi, bmiss, ipc, has_big, has_little);
-        recv_from_scheduler("%f", &expected_mips);
+        double expected_mips;
+        send_to_scheduler("%a %a %a %d %d", mkpi, bmiss, ipc, has_big, has_little);
+        recv_from_scheduler("%lf", &expected_mips);
 
         if(expected_mips > next_state_mips)
         {
