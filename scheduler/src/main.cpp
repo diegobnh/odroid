@@ -216,12 +216,18 @@ static void update_scheduler()
         send_to_scheduler("%a %a %a %d %d", mkpi, bmiss, ipc, has_big, has_little);
         recv_from_scheduler("%lf", &expected_mips);
 
+        //fprintf(stderr, "%lf %lf %lf %d %d \n", mkpi, bmiss, ipc, has_big, has_little);
+        //fprintf(stderr, "Mips predictor %lf\n", expected_mips);
+
+
         if(expected_mips > next_state_mips)
         {
             next_state_mips = expected_mips;
             next_state = static_cast<State>(i);
         }
     }
+
+    //fprintf(stderr, "-------------------\n");
 
     if(next_state != current_state)
     {
@@ -230,7 +236,7 @@ static void update_scheduler()
                     next_state == STATE_B? "4-7" :
                                            "0-7");
         sprintf(buffer, "taskset -pac %s %d >/dev/null", cfg, application_pid);
-        fprintf(stderr, "scheduler: %s\n", buffer);
+        //fprintf(stderr, "scheduler: %s\n", buffer);
 
         int status = system(buffer);
         if(status == -1)
