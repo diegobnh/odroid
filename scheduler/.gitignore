@@ -1,1 +1,4 @@
 /bin
+/scratch
+/.venv
+*.csv

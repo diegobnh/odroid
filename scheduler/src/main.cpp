@@ -2,17 +2,35 @@
 #include <cstdlib>
 #include <cstdarg>
 #include <cassert>
+#include <cinttypes>
+#include <cstring>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/prctl.h>
+#include <linux/limits.h>
 #include "perf.hpp"
+#include "time.hpp"
+
+#ifndef SCHEDULER_TYPE
+#   error Please define SCHEDULER_TYPE
+#endif
+
+#if !(SCHEDULER_TYPE >= 0 && SCHEDULER_TYPE <= 2)
+#   error SCHEDULER_TYPE must be 0, 1 or 2
+#endif
+
+#define SCHEDULER_TYPE_COLLECT 0
+#define SCHEDULER_TYPE_PREDICTOR 1
+#define SCHEDULER_TYPE_AGENT 2
 
 char** environ;
 
+static FILE* collect_stream = 0;
 static int scheduler_input_pipe = -1;
 static int scheduler_output_pipe = -1;
 static int scheduler_pid = -1;
 static int application_pid = -1;
+static uint64_t application_start_time = 0;
 
 enum State
 {
@@ -110,6 +128,26 @@ static void cleanup()
         close(scheduler_output_pipe);
         scheduler_output_pipe = -1;
     }
+
+    if(collect_stream != 0)
+    {
+        fclose(collect_stream);
+        collect_stream = 0;
+    }
+}
+
+static bool create_logging_file()
+{
+    char filename[PATH_MAX];
+    sprintf(filename, "scheduler_%d.csv", getpid());
+    collect_stream = fopen(filename, "w");
+    if(!collect_stream)
+    {
+        perror("scheduler: failed to open logging file");
+        return false;
+    }
+    fprintf(stderr, "scheduler: collecting to file %s\n", filename);
+    return true;
 }
 
 static bool spawn_scheduling_process(const char* command)
@@ -176,6 +214,7 @@ static bool spawn_scheduled_application(char* argv[])
     else
     {
         ::application_pid = pid;
+        ::application_start_time = get_time();
         return true;
     }
 }
@@ -198,12 +237,20 @@ static void update_scheduler()
         total_branch_miss += hw_data.branch_misses;
     }
 
-    double mkpi = ((double)(total_cache_miss) / (double)(total_instructions)) * 1000.0;
-    double bmiss = double(total_branch_miss) / double(total_branch_inst);
-    double ipc = double(total_instructions) / double(total_cycles);
+    const uint64_t elapsed_time = to_millis(get_time() - ::application_start_time);
+    const double mkpi = ((double)(total_cache_miss) / (double)(total_instructions)) * 1000.0;
+    const double bmiss = double(total_branch_miss) / double(total_branch_inst);
+    const double ipc = double(total_instructions) / double(total_cycles);
 
     State next_state = current_state;
     double next_state_mips = 0.0;
+
+#if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+
+    fprintf(collect_stream, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n",
+            elapsed_time, total_cycles, total_instructions, total_cache_miss, total_branch_inst, total_branch_miss);
+
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR
 
     for(int i = 0; i <= 2; ++i)
     {
@@ -223,7 +270,23 @@ static void update_scheduler()
         }
     }
 
-    if(next_state != current_state)
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+
+    char agent_reply[64];
+    send_to_scheduler("%a %a %a", mkpi, bmiss, ipc);
+    recv_from_scheduler("%s", agent_reply);
+    if(!strcmp(agent_reply, "4L"))
+        next_state = STATE_L;
+    else if(!strcmp(agent_reply, "4B"))
+        next_state = STATE_B;
+    else if(!strcmp(agent_reply, "4B4L"))
+        next_state = STATE_BL;
+    else
+        fprintf(stderr, "scheduler: scheduling agent replied with an invalid state: %s\n", agent_reply);
+
+#endif
+
+    if(::application_pid != -1 && next_state != current_state)
     {
         char buffer[512];
         auto cfg = (next_state == STATE_L? "0-3" :
@@ -255,20 +318,25 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    //const auto command = std::getenv("SCHED_COMMAND");
-    const auto command = "python3 ./dumb-scheduler.py";
-    if(!command)
-    {
-        fprintf(stderr, "scheduler: please specify the scheduler command "
-                        "through the SCHED_COMMAND environment variable.");
-        return 1;
-    }
-
-    if(!spawn_scheduling_process(command))
+#if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+    if(!create_logging_file())
     {
         cleanup();
         return 1;
     }
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR
+    if(!spawn_scheduling_process("python3 ./predictor.py"))
+    {
+        cleanup();
+        return 1;
+    }
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+    if(!spawn_scheduling_process("python3 ./agent.py"))
+    {
+        cleanup();
+        return 1;
+    }
+#endif
 
     if(!spawn_scheduled_application(&argv[1]))
     {
@@ -291,6 +359,7 @@ int main(int argc, char* argv[])
         {
             assert(pid == ::application_pid);
             application_pid = -1;
+            update_scheduler(); // last tick
         }
         else
         {
