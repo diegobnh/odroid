@@ -42,6 +42,27 @@ enum State
 static State current_state = STATE_BL;
 static double current_state_mips = 0.0;
 
+static double get_cpu_usage()
+{
+    char buffer[256];
+    sprintf(buffer, "ps -p %d -mo pcpu", ::application_pid);
+    FILE* stream = popen(buffer, "r");
+    if(!stream)
+    {
+        perror("failed to collect cpu usage");
+        return 0.0;
+    }
+    
+    double total = 0.0;
+    fgets(buffer, sizeof(buffer), stream); // skip %CPU
+    if(fscanf(stream, "%lf", &total) != 1)
+        total = 0.0;
+
+    fclose(stream);
+
+    return total;
+}
+
 static void send_to_scheduler(const char* fmt, ...)
 {
     char buffer[512];
@@ -235,6 +256,8 @@ static bool spawn_scheduled_application(char* argv[])
 
 static void update_scheduler()
 {
+    const double cpu_usage = get_cpu_usage();
+
     uint64_t total_cycles = 0;
     uint64_t total_instructions = 0;
     uint64_t total_cache_miss = 0;
@@ -274,7 +297,7 @@ static void update_scheduler()
         const bool has_little = (i == STATE_BL || i == STATE_L);
 
         double expected_mips;
-        send_to_scheduler("%a %a %a %d %d", mkpi, bmiss, ipc, has_big, has_little);
+        send_to_scheduler("%a %a %a %d %d %a", mkpi, bmiss, ipc, has_big, has_little, cpu_usage);
         recv_from_scheduler("%lf", &expected_mips);
 
         //fprintf(stderr, "%lf %lf %lf %d %d \n", mkpi, bmiss, ipc, has_big, has_little);

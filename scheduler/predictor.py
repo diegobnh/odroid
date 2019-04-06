@@ -11,12 +11,13 @@ def main():
     print(model.predict([[0.000011,0.085019,0.498491,1,0]])[0])
 '''
     while True:
-        mpki_str, bmiss_str, ipc_str, big_str, little_str = input().split()
+        mpki_str, bmiss_str, ipc_str, big_str, little_str, cpu_usage = input().split()
         mpki = float.fromhex(mpki_str)
         bmiss = float.fromhex(bmiss_str)
         ipc = float.fromhex(ipc_str)
         hasbig = bool(int(big_str))
         haslittle = bool(int(little_str))
+        cpu_usage = float.fromhex(cpu_usage)
         #print(random.random())
         print(model.predict([[mpki, bmiss, ipc, hasbig, haslittle]])[0])
 '''
