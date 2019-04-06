@@ -150,6 +150,20 @@ static bool create_logging_file()
     return true;
 }
 
+static bool create_time_file(uint64_t time_ms)
+{
+    char filename[PATH_MAX];
+    sprintf(filename, "scheduler_%d.time", getpid());
+    FILE* time_stream = fopen(filename, "w");
+    if(!time_stream)
+    {
+        perror("scheduler: failed to open time file");
+        return false;
+    }
+    fprintf(time_stream, "%" PRIu64, time_ms);
+    return true;
+}
+
 static bool spawn_scheduling_process(const char* command)
 {
     int inpipefd[2] = {-1, -1};
@@ -369,6 +383,8 @@ int main(int argc, char* argv[])
             update_scheduler();
         }
     }
+
+    create_time_file(to_millis(get_time() - ::application_start_time));
 
     fprintf(stderr, "scheduler: main application finished\n");
     perf_shutdown();
