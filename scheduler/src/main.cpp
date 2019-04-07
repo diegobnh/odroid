@@ -10,6 +10,7 @@
 #include <linux/limits.h>
 #include "perf.hpp"
 #include "time.hpp"
+#include "states.h" //Diego
 
 #ifndef SCHEDULER_TYPE
 #   error Please define SCHEDULER_TYPE
@@ -32,15 +33,21 @@ static int scheduler_pid = -1;
 static int application_pid = -1;
 static uint64_t application_start_time = 0;
 
+/* - Diego
 enum State
 {
     STATE_L,
     STATE_B,
     STATE_BL,
 };
+*/
 
+/* - Diego
 static State current_state = STATE_BL;
 static double current_state_mips = 0.0;
+*/
+static State current_state = STATE_4l4b;
+
 
 static double get_cpu_usage()
 {
@@ -258,37 +265,38 @@ static void update_scheduler()
 {
     const double cpu_usage = get_cpu_usage();
 
-    uint64_t total_cycles = 0;
-    uint64_t total_instructions = 0;
-    uint64_t total_cache_miss = 0;
-    uint64_t total_branch_inst = 0;
-    uint64_t total_branch_miss = 0;
+    uint64_t total_pmu_1 = 0;
+    uint64_t total_pmu_2 = 0;
+    uint64_t total_pmu_3 = 0;
+    uint64_t total_pmu_4 = 0;
+    uint64_t total_pmu_5 = 0;
 
     for(int cpu = 0, max_cpu = perf_nprocs(); cpu < max_cpu; ++cpu)
     {
         const auto hw_data = perf_consume_hw(cpu);
-        total_cycles += hw_data.cpu_cycles;
-        total_instructions += hw_data.instructions;
-        total_cache_miss += hw_data.cache_misses;
-        total_branch_inst += hw_data.branch_instructions;
-        total_branch_miss += hw_data.branch_misses;
+        total_pmu_1 += hw_data.pmu_1;   //cycles
+        total_pmu_2 += hw_data.pmu_2;   //instructions
+        total_pmu_3 += hw_data.pmu_3;   //cache_misses
+        total_pmu_4 += hw_data.pmu_4;   //branch_inst
+        total_pmu_5 += hw_data.pmu_5;   //branch_miss
     }
 
     const uint64_t elapsed_time = to_millis(get_time() - ::application_start_time);
-    const double mkpi = ((double)(total_cache_miss) / (double)(total_instructions)) * 1000.0;
-    const double bmiss = double(total_branch_miss) / double(total_branch_inst);
-    const double ipc = double(total_instructions) / double(total_cycles);
+    const double mkpi = ((double)(total_pmu_3) / (double)(total_pmu_2)) * 1000.0;
+    const double bmiss = double(total_pmu_5) / double(total_pmu_4);
+    const double ipc = double(total_pmu_2) / double(total_pmu_1);
 
     State next_state = current_state;
-    double next_state_mips = 0.0;
+    //double next_state_mips = 0.0; Diego
+
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
 
     fprintf(collect_stream, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n",
-            elapsed_time, total_cycles, total_instructions, total_cache_miss, total_branch_inst, total_branch_miss);
+            elapsed_time, total_pmu_1, total_pmu_2, total_pmu_3, total_pmu_4, total_pmu_5);
 
-#elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR
-
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT  //Diego
+    /* - Diego
     for(int i = 0; i <= 2; ++i)
     {
         assert(i == STATE_BL || i == STATE_B || i == STATE_L);
@@ -309,9 +317,16 @@ static void update_scheduler()
             next_state = static_cast<State>(i);
         }
     }
+    */
+    int state_index_reply;    
+    send_to_scheduler("%a %a %a %a %d", mkpi, bmiss, ipc, cpu_usage, current_state);
+    recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate 
+    next_state = static_cast<State>(state_index_reply);
 
-#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
 
+
+//#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+    /* - Diego
     char agent_reply[64];
     send_to_scheduler("%a %a %a", mkpi, bmiss, ipc);
     recv_from_scheduler("%s", agent_reply);
@@ -323,17 +338,24 @@ static void update_scheduler()
         next_state = STATE_BL;
     else
         fprintf(stderr, "scheduler: scheduling agent replied with an invalid state: %s\n", agent_reply);
+    */    
+    
+
 
 #endif
 
     if(::application_pid != -1 && next_state != current_state)
     {
         char buffer[512];
+        /* - Diego
         auto cfg = (next_state == STATE_L? "0-3" :
                     next_state == STATE_B? "4-7" :
                                            "0-7");
+        */
+        auto cfg = configs[next_state];//extern variable declared in States.h
+
         sprintf(buffer, "taskset -pac %s %d >/dev/null", cfg, application_pid);
-        //fprintf(stderr, "scheduler: %s\n", buffer);
+        fprintf(stderr, "scheduler: %s\n", buffer);
 
         int status = system(buffer);
         if(status == -1)
@@ -346,7 +368,7 @@ static void update_scheduler()
         }
 
         current_state = next_state;
-        current_state_mips = next_state_mips;
+        //current_state_mips = next_state_mips; Diego
     }
 }
 

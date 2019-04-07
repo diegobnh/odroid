@@ -11,11 +11,11 @@ struct PerfSoftwareData
 /// Hardware performance counters.
 struct PerfHardwareData
 {
-    uint64_t cpu_cycles = -1;
-    uint64_t instructions = -1;
-    uint64_t cache_misses = -1;
-    uint64_t branch_instructions = -1;
-    uint64_t branch_misses = -1;
+    uint64_t pmu_1 = -1;
+    uint64_t pmu_2 = -1;
+    uint64_t pmu_3 = -1;
+    uint64_t pmu_4 = -1;
+    uint64_t pmu_5 = -1;
 };
 
 /// Initialises the performance counting subsystem.
