@@ -29,6 +29,8 @@ def main():
             current_state = initial_state
             print(current_state)
             flag = 1
+        else:
+            print(current_state)
         
         #print(random.randint(0, 23))#range to State enum
 

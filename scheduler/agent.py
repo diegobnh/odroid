@@ -18,6 +18,14 @@ def main():
         cpu_usage  = float.fromhex(cpu_usage_str)
         current_state = int(state_str)
 
+        if current_state == -1:
+            assert pmu1 == 0.0
+            assert pmu2 == 0.0
+            assert pmu3 == 0.0
+            assert cpu_usage == 0.0
+            # This is the end of a episode
+            print(current_state) # the result does not matter, but it is necessary
+            continue
                         
         if (cpu_usage < THRESHOLD and flag == 1): #Probability in sequencial phase                                               
             initial_state = current_state
@@ -27,6 +35,8 @@ def main():
             current_state = initial_state
             print(current_state)
             flag = 1
+        else:
+            print(current_state)
 
 
         #print(randint(0, 23))#range to State enum

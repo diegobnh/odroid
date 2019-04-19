@@ -46,11 +46,14 @@ enum State
 static State current_state = STATE_BL;
 static double current_state_mips = 0.0;
 */
-static State current_state = STATE_4l4b;
+static State current_state;
 
 
 static double get_cpu_usage()
 {
+    if(::application_pid == -1)
+        return 0.0;
+
     char buffer[256];
     sprintf(buffer, "ps -p %d -mo pcpu", ::application_pid);
     FILE* stream = popen(buffer, "r");
@@ -257,6 +260,7 @@ static bool spawn_scheduled_application(char* argv[])
     {
         ::application_pid = pid;
         ::application_start_time = get_time();
+        ::current_state = STATE_4l4b;
         return true;
     }
 }
@@ -323,6 +327,15 @@ static void update_scheduler()
     recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate 
     next_state = static_cast<State>(state_index_reply);
 
+#if SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+    if(::application_pid == -1) // end of episode
+    {
+        send_to_scheduler("%a %a %a %a %d", 0.0, 0.0, 0.0, 0.0, -1);
+        recv_from_scheduler("%d", &state_index_reply);
+        next_state = static_cast<State>(state_index_reply);
+    }
+#endif
+
 
 
 //#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
@@ -381,18 +394,21 @@ int main(int argc, char* argv[])
     }
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+    const int num_episodes = 1; // Collect should run a single episode
     if(!create_logging_file())
     {
         cleanup();
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR
+    const int num_episodes = 1; // Predictor should run a single episode
     if(!spawn_scheduling_process("python3 ./predictor.py"))
     {
         cleanup();
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+    const int num_episodes = 10; // Agent runs multiple episodes
     if(!spawn_scheduling_process("python3 ./agent.py"))
     {
         cleanup();
@@ -400,39 +416,46 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    if(!spawn_scheduled_application(&argv[1]))
+    for(int curr_episode = 0; curr_episode < num_episodes; ++curr_episode)
     {
-        cleanup();
-        return 1;
+        perf_init();
+        
+        if(!spawn_scheduled_application(&argv[1]))
+        {
+            cleanup();
+            return 1;
+        }
+
+        fprintf(stderr, "scheduler: starting episode %d with pid %d\n", curr_episode + 1, application_pid);
+
+        while(::application_pid != -1)
+        {
+            usleep(20000); // 20ms
+
+            int pid = waitpid(::application_pid, NULL, WNOHANG);
+            if(pid == -1)
+            {
+                perror("scheduler: waitpid in main loop failed");
+            }
+            else if(pid != 0)
+            {
+                assert(pid == ::application_pid);
+                application_pid = -1;
+                update_scheduler();
+            }
+            else
+            {
+                update_scheduler();
+            }
+        }
+
+        perf_shutdown();
+
+        create_time_file(to_millis(get_time() - ::application_start_time));
+
+        fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }
 
-    perf_init();
-
-    while(::application_pid != -1)
-    {
-        usleep(20000); // 20ms
-
-        int pid = waitpid(::application_pid, NULL, WNOHANG);
-        if(pid == -1)
-        {
-            perror("scheduler: waitpid in main loop failed");
-        }
-        else if(pid != 0)
-        {
-            assert(pid == ::application_pid);
-            application_pid = -1;
-            update_scheduler(); // last tick
-        }
-        else
-        {
-            update_scheduler();
-        }
-    }
-
-    create_time_file(to_millis(get_time() - ::application_start_time));
-
-    fprintf(stderr, "scheduler: main application finished\n");
-    perf_shutdown();
     cleanup();
 
     return 0;
