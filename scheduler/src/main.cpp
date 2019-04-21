@@ -33,19 +33,7 @@ static int scheduler_pid = -1;
 static int application_pid = -1;
 static uint64_t application_start_time = 0;
 
-/* - Diego
-enum State
-{
-    STATE_L,
-    STATE_B,
-    STATE_BL,
-};
-*/
 
-/* - Diego
-static State current_state = STATE_BL;
-static double current_state_mips = 0.0;
-*/
 static State current_state;
 
 
@@ -72,6 +60,127 @@ static double get_cpu_usage()
 
     return total;
 }
+
+
+
+
+
+/*
+
+diego@dbmm:~/Downloads/rodinia_3.1/openmp/streamcluster$ ps -p 3740 -mo pcpu
+%CPU
+ 378
+ 102
+ 106
+ 104
+ 105
+
+
+Precisa confirmar se a saída é algo parecido com o que está acima e se a ordem é do little para o big.
+Eu estou assumindo que inicia com a coleta no little. Ou pode ser ordenado pelo nível de utilização. Precisa confirmar isso.
+
+
+void get_cpu_usage(double *cpu_usage)
+{
+    if(::application_pid == -1)
+        return 0.0;
+
+    char buffer[256];
+    sprintf(buffer, "ps -p %d -mo pcpu", ::application_pid);
+    FILE* stream = popen(buffer, "r");
+    if(!stream)
+    {
+        perror("failed to collect cpu usage");
+        return 0.0;
+    }
+
+    
+    double total = 0.0;
+    fgets(buffer, sizeof(256), stream); // skip %CPU
+
+//  if(fscanf(stream, "%lf", &total) != 1)
+//      total = 0.0;
+
+
+    double total_cluster_little = 0.0;
+    double total_cluster_big    = 0.0;
+
+    int n_littles;
+    int n_bigs;
+    int i;
+    double aux=0.0;
+    double teste=0.0;
+
+
+    switch(current_state)
+    {
+          case 3: //4l
+                  fprintf(stderr, "4l\n");
+                  n_littles = 4;
+                  n_bigs = 0;
+                  for(i=0; i< n_littles; i++)
+                  {
+                        fscanf(stream, "%lf\n", &aux);
+                        total_cluster_little += aux; 
+                  }
+                  for(i=0; i< n_bigs; i++)
+                  {
+                        fscanf(stream, "%lf\n", &aux);
+                        total_cluster_big += aux; 
+                  } 
+                  break;
+          case 7: //4b
+                  fprintf(stderr, "4b\n");
+                  n_littles = 0;
+                  n_bigs = 4;
+                  for(i=0; i< n_littles; i++)
+                  {
+                        fscanf(stream, "%lf\n", &aux);
+                        total_cluster_little += aux; 
+                  }
+                  for(i=0; i< n_bigs; i++)
+                  {
+                        fscanf(stream, "%lf\n", &aux);
+                        total_cluster_big += aux; 
+                  } 
+                  break;
+
+          case 23://4b4l
+                  fprintf(stderr, "4b4l\n");
+                  n_littles = 4;
+                  n_bigs = 4;
+                  for(i=0; i< n_littles; i++)
+                  {
+                        fscanf(stream, "%lf\n", &aux);
+                        total_cluster_little += aux; 
+                  }
+                  for(i=0; i< n_bigs; i++)
+                  {
+                        fscanf(stream, "%lf", &aux);
+                        total_cluster_big += aux; 
+                  } 
+                  break;
+          default:
+                  total_cluster_little = total_cluster_big = 0.0;
+
+    }
+    
+    
+    fclose(stream);
+
+    cpu_usage[0] = total_cluster_little;
+    cpu_usage[1] = total_cluster_big;
+}
+
+
+//call 
+//double cpu_usage[2];
+//get_cpu_usage(cpu_usage);
+
+
+
+*/
+
 
 static void send_to_scheduler(const char* fmt, ...)
 {
@@ -300,71 +409,31 @@ static void update_scheduler()
             elapsed_time, total_pmu_1, total_pmu_2, total_pmu_3, total_pmu_4, total_pmu_5);
 
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT  //Diego
-    /* - Diego
-    for(int i = 0; i <= 2; ++i)
-    {
-        assert(i == STATE_BL || i == STATE_B || i == STATE_L);
-
-        const bool has_big = (i == STATE_BL || i == STATE_B);
-        const bool has_little = (i == STATE_BL || i == STATE_L);
-
-        double expected_mips;
-        send_to_scheduler("%a %a %a %d %d %a", mkpi, bmiss, ipc, has_big, has_little, cpu_usage);
-        recv_from_scheduler("%lf", &expected_mips);
-
-        //fprintf(stderr, "%lf %lf %lf %d %d \n", mkpi, bmiss, ipc, has_big, has_little);
-        //fprintf(stderr, "Mips predictor %lf\n", expected_mips);
-
-        if(expected_mips > next_state_mips)
-        {
-            next_state_mips = expected_mips;
-            next_state = static_cast<State>(i);
-        }
-    }
-    */
-    int state_index_reply;    
-    send_to_scheduler("%a %a %a %a %d", mkpi, bmiss, ipc, cpu_usage, current_state);
-    recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate 
+    int state_index_reply;
+    float exec_time = -1.0;
+    send_to_scheduler("%a %a %a %a %d %f", mkpi, bmiss, ipc, cpu_usage, current_state, exec_time);
+    recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate
     next_state = static_cast<State>(state_index_reply);
+
+#endif
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
     if(::application_pid == -1) // end of episode
     {
-        send_to_scheduler("%a %a %a %a %d", 0.0, 0.0, 0.0, 0.0, -1);
+        exec_time = to_millis(get_time() - ::application_start_time);
+        //fprintf(stderr, "%f",exec_time);
+        send_to_scheduler("%a %a %a %a %d %f", 0.0, 0.0, 0.0, 0.0, -1, exec_time);
         recv_from_scheduler("%d", &state_index_reply);
         next_state = static_cast<State>(state_index_reply);
+
+        create_time_file(exec_time);
     }
 #endif
 
 
-
-//#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
-    /* - Diego
-    char agent_reply[64];
-    send_to_scheduler("%a %a %a", mkpi, bmiss, ipc);
-    recv_from_scheduler("%s", agent_reply);
-    if(!strcmp(agent_reply, "4L"))
-        next_state = STATE_L;
-    else if(!strcmp(agent_reply, "4B"))
-        next_state = STATE_B;
-    else if(!strcmp(agent_reply, "4B4L"))
-        next_state = STATE_BL;
-    else
-        fprintf(stderr, "scheduler: scheduling agent replied with an invalid state: %s\n", agent_reply);
-    */    
-    
-
-
-#endif
-
     if(::application_pid != -1 && next_state != current_state)
     {
         char buffer[512];
-        /* - Diego
-        auto cfg = (next_state == STATE_L? "0-3" :
-                    next_state == STATE_B? "4-7" :
-                                           "0-7");
-        */
         auto cfg = configs[next_state];//extern variable declared in States.h
 
         sprintf(buffer, "taskset -pac %s %d >/dev/null", cfg, application_pid);
@@ -381,7 +450,6 @@ static void update_scheduler()
         }
 
         current_state = next_state;
-        //current_state_mips = next_state_mips; Diego
     }
 }
 
@@ -408,7 +476,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
-    const int num_episodes = 10; // Agent runs multiple episodes
+    const int num_episodes = 3; // Agent runs multiple episodes
     if(!spawn_scheduling_process("python3 ./agent.py"))
     {
         cleanup();
@@ -419,7 +487,7 @@ int main(int argc, char* argv[])
     for(int curr_episode = 0; curr_episode < num_episodes; ++curr_episode)
     {
         perf_init();
-        
+
         if(!spawn_scheduled_application(&argv[1]))
         {
             cleanup();
@@ -451,7 +519,10 @@ int main(int argc, char* argv[])
 
         perf_shutdown();
 
-        create_time_file(to_millis(get_time() - ::application_start_time));
+        #if SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+              create_time_file(to_millis(get_time() - ::application_start_time));
+        #endif
+
 
         fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }

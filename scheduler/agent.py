@@ -2,7 +2,7 @@
 import sys
 from random import randint
 
-THRESHOLD = 120
+THRESHOLD = 150
 
 def main():
 
@@ -10,13 +10,14 @@ def main():
     flag = 1;
  
     while True:
-        pmu1_str, pmu2_str, pmu3_str, cpu_usage_str, state_str = input().split()
+        pmu1_str, pmu2_str, pmu3_str, cpu_usage_str, state_str, exec_time_str = input().split()
 
         pmu1 = float.fromhex(pmu1_str)
         pmu2 = float.fromhex(pmu2_str)
         pmu3 = float.fromhex(pmu3_str)
         cpu_usage  = float.fromhex(cpu_usage_str)
         current_state = int(state_str)
+        exec_time_str = float(exec_time_str)
 
         if current_state == -1:
             assert pmu1 == 0.0
@@ -26,11 +27,11 @@ def main():
             # This is the end of a episode
             print(current_state) # the result does not matter, but it is necessary
             continue
-                        
-        if (cpu_usage < THRESHOLD and flag == 1): #Probability in sequencial phase                                               
+
+        if (cpu_usage < THRESHOLD and flag == 1): #Probability in sequencial phase
             initial_state = current_state
             flag = 0
-            print(5) #means 2big in enum State 
+            print(3) #means 2big in enum State 
         elif (cpu_usage > THRESHOLD and flag == 0):  #Probability there is more than one thread working   
             current_state = initial_state
             print(current_state)
@@ -40,7 +41,8 @@ def main():
 
 
         #print(randint(0, 23))#range to State enum
-        
+
 
 if __name__ == "__main__":
     main()
+
