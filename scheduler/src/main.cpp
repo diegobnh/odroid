@@ -37,149 +37,81 @@ static uint64_t application_start_time = 0;
 static State current_state;
 
 
-static double get_cpu_usage()
-{
-    if(::application_pid == -1)
-        return 0.0;
-
-    char buffer[256];
-    sprintf(buffer, "ps -p %d -mo pcpu", ::application_pid);
-    FILE* stream = popen(buffer, "r");
-    if(!stream)
-    {
-        perror("failed to collect cpu usage");
-        return 0.0;
-    }
-    
-    double total = 0.0;
-    fgets(buffer, sizeof(buffer), stream); // skip %CPU
-    if(fscanf(stream, "%lf", &total) != 1)
-        total = 0.0;
-
-    fclose(stream);
-
-    return total;
-}
-
-
-
-
-
-/*
-
-diego@dbmm:~/Downloads/rodinia_3.1/openmp/streamcluster$ ps -p 3740 -mo pcpu
-%CPU
- 378
- 102
- 106
- 104
- 105
-
-
-Precisa confirmar se a saída é algo parecido com o que está acima e se a ordem é do little para o big.
-Eu estou assumindo que inicia com a coleta no little. Ou pode ser ordenado pelo nível de utilização. Precisa confirmar isso.
-
-
 void get_cpu_usage(double *cpu_usage)
 {
     if(::application_pid == -1)
-        return 0.0;
+    {
+        cpu_usage[0] = 0.0;
+        cpu_usage[1] = 0.0;
+        return;
+    }
 
+    int count = 0;
     char buffer[256];
-    sprintf(buffer, "ps -p %d -mo pcpu", ::application_pid);
+    sprintf(buffer, "ps -p %d -mo pcpu,psr", ::application_pid);
     FILE* stream = popen(buffer, "r");
     if(!stream)
     {
         perror("failed to collect cpu usage");
-        return 0.0;
+        cpu_usage[0] = 0.0;
+        cpu_usage[1] = 0.0;
+        return;
     }
-
-    
-    double total = 0.0;
-    fgets(buffer, sizeof(256), stream); // skip %CPU
-
-//  if(fscanf(stream, "%lf", &total) != 1)
-//      total = 0.0;
-
 
     double total_cluster_little = 0.0;
     double total_cluster_big    = 0.0;
-
-    int n_littles;
-    int n_bigs;
-    int i;
-    double aux=0.0;
-    double teste=0.0;
-
-
-    switch(current_state)
+    
+    // skip %CPU
+    count = 0;
+    buffer[0] = 0;
+    while(count == 0 || buffer[count-1] != '\n')
     {
-          case 3: //4l
-                  fprintf(stderr, "4l\n");
-                  n_littles = 4;
-                  n_bigs = 0;
-                  for(i=0; i< n_littles; i++)
-                  {
-                        fscanf(stream, "%lf\n", &aux);
-                        total_cluster_little += aux; 
-                  }
-                  for(i=0; i< n_bigs; i++)
-                  {
-                        fscanf(stream, "%lf\n", &aux);
-                        total_cluster_big += aux; 
-                  } 
-                  break;
-          case 7: //4b
-                  fprintf(stderr, "4b\n");
-                  n_littles = 0;
-                  n_bigs = 4;
-                  for(i=0; i< n_littles; i++)
-                  {
-                        fscanf(stream, "%lf\n", &aux);
-                        total_cluster_little += aux; 
-                  }
-                  for(i=0; i< n_bigs; i++)
-                  {
-                        fscanf(stream, "%lf\n", &aux);
-                        total_cluster_big += aux; 
-                  } 
-                  break;
-
-          case 23://4b4l
-                  fprintf(stderr, "4b4l\n");
-                  n_littles = 4;
-                  n_bigs = 4;
-                  for(i=0; i< n_littles; i++)
-                  {
-                        fscanf(stream, "%lf\n", &aux);
-                        total_cluster_little += aux; 
-                  }
-                  for(i=0; i< n_bigs; i++)
-                  {
-                        fscanf(stream, "%lf", &aux);
-                        total_cluster_big += aux; 
-                  } 
-                  break;
-          default:
-                  total_cluster_little = total_cluster_big = 0.0;
-
+        if(!fgets(&buffer[count], sizeof(buffer), stream))
+            break;
+        count = strlen(buffer);
     }
-    
-    
+
+    // skip total
+    count = 0;
+    buffer[0] = 0;
+    while(count == 0 || buffer[count-1] != '\n')
+    {
+        if(!fgets(&buffer[count], sizeof(buffer), stream))
+            break;
+        count = strlen(buffer);
+    }
+
+    // iterate on the next lines
+    while(true)
+    {
+        count = 0;
+        buffer[0] = 0;
+        while(count == 0 || buffer[count-1] != '\n')
+        {
+            if(!fgets(&buffer[count], sizeof(buffer), stream))
+                break;
+            count = strlen(buffer);
+        }
+
+        if(count == 0)
+            break;
+
+        double row_cpu_usage;
+        int row_cpu_core;
+        sscanf(buffer, "%lf %d", &row_cpu_usage, &row_cpu_core);
+
+        if(row_cpu_core >= 0 && row_cpu_core <= 3)
+            total_cluster_little += row_cpu_usage;
+        else
+            total_cluster_big += row_cpu_usage;
+    }
+
     fclose(stream);
 
     cpu_usage[0] = total_cluster_little;
     cpu_usage[1] = total_cluster_big;
 }
 
-
-//call 
-//double cpu_usage[2];
-//get_cpu_usage(cpu_usage);
-
-
-
-*/
 
 
 static void send_to_scheduler(const char* fmt, ...)
@@ -376,7 +308,9 @@ static bool spawn_scheduled_application(char* argv[])
 
 static void update_scheduler()
 {
-    const double cpu_usage = get_cpu_usage();
+    double cpu_usage[2];
+    get_cpu_usage(cpu_usage);
+
 
     uint64_t total_pmu_1 = 0;
     uint64_t total_pmu_2 = 0;
@@ -411,7 +345,7 @@ static void update_scheduler()
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT  //Diego
     int state_index_reply;
     float exec_time = -1.0;
-    send_to_scheduler("%a %a %a %a %d %f", mkpi, bmiss, ipc, cpu_usage, current_state, exec_time);
+    send_to_scheduler("%a %a %a %a %a %d %f", mkpi, bmiss, ipc, cpu_usage[0], cpu_usage[1], current_state, exec_time);
     recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate
     next_state = static_cast<State>(state_index_reply);
 
@@ -422,7 +356,7 @@ static void update_scheduler()
     {
         exec_time = to_millis(get_time() - ::application_start_time);
         //fprintf(stderr, "%f",exec_time);
-        send_to_scheduler("%a %a %a %a %d %f", 0.0, 0.0, 0.0, 0.0, -1, exec_time);
+        send_to_scheduler("%a %a %a %a %a %d %f", 0.0, 0.0, 0.0, 0.0, 0.0,  -1, exec_time);
         recv_from_scheduler("%d", &state_index_reply);
         next_state = static_cast<State>(state_index_reply);
 

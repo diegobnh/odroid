@@ -10,12 +10,13 @@ def main():
     flag = 1;
  
     while True:
-        pmu1_str, pmu2_str, pmu3_str, cpu_usage_str, state_str, exec_time_str = input().split()
+        pmu1_str, pmu2_str, pmu3_str, cpu_usage_little_str, cpu_usage_big_str, state_str, exec_time_str = input().split()
 
         pmu1 = float.fromhex(pmu1_str)
         pmu2 = float.fromhex(pmu2_str)
         pmu3 = float.fromhex(pmu3_str)
-        cpu_usage  = float.fromhex(cpu_usage_str)
+        cpu_usage_little  = float.fromhex(cpu_usage_little_str)
+        cpu_usage_big  = float.fromhex(cpu_usage_big_str)
         current_state = int(state_str)
         exec_time_str = float(exec_time_str)
 
