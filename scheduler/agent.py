@@ -24,16 +24,17 @@ def main():
             assert pmu1 == 0.0
             assert pmu2 == 0.0
             assert pmu3 == 0.0
-            assert cpu_usage == 0.0
+            assert cpu_usage_little == 0.0
+            assert cpu_usage_bit == 0.0
             # This is the end of a episode
             print(current_state) # the result does not matter, but it is necessary
             continue
 
-        if (cpu_usage < THRESHOLD and flag == 1): #Probability in sequencial phase
+        if ((cpu_usage_little + cpu_usage_big) < THRESHOLD and flag == 1): #Probability in sequencial phase
             initial_state = current_state
             flag = 0
             print(3) #means 2big in enum State 
-        elif (cpu_usage > THRESHOLD and flag == 0):  #Probability there is more than one thread working   
+        elif ((cpu_usage_little + cpu_usage_big) > THRESHOLD and flag == 0):  #Probability there is more than one thread working   
             current_state = initial_state
             print(current_state)
             flag = 1

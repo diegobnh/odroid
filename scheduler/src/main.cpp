@@ -110,6 +110,7 @@ void get_cpu_usage(double *cpu_usage)
 
     cpu_usage[0] = total_cluster_little;
     cpu_usage[1] = total_cluster_big;
+    fprintf(stderr, "%lf\t %lf\n", cpu_usage[0], cpu_usage[1]);
 }
 
 
