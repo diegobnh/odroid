@@ -10,11 +10,14 @@ from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.common import set_global_seeds
 import sys
 
+eps_stop = 2
 num_actions=3
-index_state=6
-index_exec_time=7
-
+index_state=9
+index_exec_time=10
+max_num_big = 4
+max_num_little = 4
 map_action_state = [3, 7, 23]
+map_reward = [-100, -50, -10, -5, 1, 5, 10, 50, 100, 200]
 
 ref_arquivo = open("Output.txt","w", buffering=1)
 
@@ -39,16 +42,19 @@ ref_arquivo = open("Output.txt","w", buffering=1)
 class EnviromentExample(Env):
     '''
      Observation:
-        Type: Box(6)
+        Type: Box(11)
         Num	Observation
         0	pmu1
         1	pmu2
         2	pmu3
         3       pmu4
-        4       cpu usage little
-        5       cpu usage big
-        6       state
-        7       exec_time
+        4       cpu_migrations
+        5       context_switches
+        6       cpu usage little
+        7       cpu usage big
+        8       num_little_enabled
+        9       num_big_enabled
+        10      exec_time
 
 
     Actions:
@@ -71,20 +77,43 @@ class EnviromentExample(Env):
 
     def __init__(self):
         self.action_space = Discrete(num_actions)
-        self.observation_space = Box(low=-1, high=100000, shape=(8,))
+        self.observation_space = Box(low=-1, high=100000, shape=(11,))
         self.dim = num_actions
         self.acum_reward = 0
         self.immediate_reward = 0
         self.num_steps = 0
-        self.exec_time_1l = 1000000
         self.total_time_steps=0
         self.episodes = 0
         self.action_list = []
-
+        self.upper_bound = 0
+        self.lower_bound = 0 #smaller execution time
+        self.diff_upper_lower = 0
+        self.interval = 0
+        self.seed(137)
+        self.set_limits()
 
     def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(1237)
+        self.np_random, seed = seeding.np_random(seed)
         return [seed]
+
+    def set_limits(self):
+        f1 = open("1l.time","r")
+        f2 = open("1b.time","r")
+        time_1l = float(f1.readline().rstrip("\n")) 
+        time_1b = float(f2.readline().rstrip("\n"))
+        f1.close()
+        f2.close() 
+
+        self.upper_bound = time_1l
+ 
+        self.lower_bound = self.upper_bound / (((self.upper_bound/time_1b) * max_num_big ) + max_num_little)
+        self.diff_upper_lower =  self.upper_bound - self.lower_bound
+        self.interval = self.diff_upper_lower/10
+        ref_arquivo.write("Time_1b " + str(time_1b) + "\n" +  "Time_1l " + str(time_1l) + "\n"  + "Perc.Melhoria_l/b " + str("{0:.6f}".format(time_1l/time_1b)) + "\n")
+        ref_arquivo.write("Menor_Tempo_Possivel:" + str(str("{0:.2f}".format(self.lower_bound))) + "\n" + "Maior_tempo_Possível(1l) " + str(str("{0:.2f}".format(self.upper_bound))) + "\n")
+        ref_arquivo.write("\n\n")
+        #ref_arquivo.write("\n")
+ 
 
     def reset(self):
         self.acum_reward = 0
@@ -99,34 +128,39 @@ class EnviromentExample(Env):
 
         a = map_action_state[action]
 
+        '''
         if self.episodes == 0:
-            a = 0
+            a = 0 #1l
         elif self.episodes == 1:
-            a = 3
+            a = 4 #1b
         elif self.episodes == 2:
-            a = 7
+            a = 3 #4l
         elif self.episodes == 3:
-            a = 23
+            a = 7 #4b
+        elif self.episodes == 4:
+            a = 23 #4b4l
+        '''
 
-
-        item = "A"+ str(self.num_steps) + ":" + str(a) 
+        item = "T"+ str(self.num_steps) + ":" + str(a) 
         self.action_list.append(item)
 
 
-        done = int(self.state[index_state]) == -1  #Sinaliza que a execução da aplicação acabou
+        done = int(self.state[index_exec_time]) != -1  #Sinaliza que a execução da aplicação acabou
         if done:
            self.episodes += 1
-
-           if self.episodes == 1:
-              self.exec_time_1l = self.state[index_exec_time]
 
            reward = self.get_final_reward()
 
            #ref_arquivo.write(str(self.action_list))
-           ref_arquivo.write("\n" + "Exec_time:" + str(self.state[index_exec_time]) + " Episodio:" + str(self.episodes) +  " Reward:" +  str(reward) + " Steps:" + str(self.num_steps) + " " + str(self.action_list) +  "\n")
+           ref_arquivo.write("\n" + "Exec_time:" + str(self.state[index_exec_time]) +  \
+                                    " Episodio:" + str(self.episodes)               + \
+                                    " Reward:"   + str(reward)                      + \
+                                    " Steps:"    + str(self.num_steps)              + \
+                                    " "          + str(self.action_list)            + \
+                                    "\n")
            ref_arquivo.write("\n")
 
-           if self.episodes == 1500:
+           if self.episodes == eps_stop:
               self.save_model()
               ref_arquivo.write("Total timesteps:" + str(self.total_time_steps) + "\n")
               ref_arquivo.close()
@@ -134,10 +168,18 @@ class EnviromentExample(Env):
 
            self.write_to_scheduler(a) #Escrevendo a última ação do episódio para o escalonador
 
-
         else:
            reward = self.get_immediate_reward()
-           ref_arquivo.write(str("{0:.6f}".format(self.state[0])) + "  " + str("{0:.6f}".format(self.state[1])) + "  " + str("{0:.6f}".format(self.state[2])) + "  " + str("{0:.6f}".format(self.state[3])) + "  " + str("{0:.6f}".format(self.state[4])) + "  " + str("{0:.6f}".format(self.state[5]) + "  Acao:" + str(a) + "\n") )
+           ref_arquivo.write(str("{0:.6f}".format(self.state[0])) + "  " + \
+                             str("{0:.6f}".format(self.state[1])) + "  " + \
+                             str("{0:.6f}".format(self.state[2])) + "  " + \
+                             str("{0:.6f}".format(self.state[3])) + "  " + \
+                             str("{0:.6f}".format(self.state[4])) + "  " + \
+                             str("{0:.6f}".format(self.state[5])) + "  " + \
+                             str("{0:10.6f}".format(self.state[6])) + "  " + \
+                             str("{0:10.6f}".format(self.state[7])) + "  " + \
+                             str("{0:.2f}".format(self.state[8])) + "  " + \
+                             str("{0:.2f}".format(self.state[9])) + "\n") 
 
            self.write_to_scheduler(a) #DEPOIS ENVIA UMA A
            self.state = self.read_from_scheduler()
@@ -156,17 +198,10 @@ class EnviromentExample(Env):
         #return self.immediate_reward #or return 0
 
     def get_final_reward(self):
-
-        value = self.exec_time_1l/self.state[index_exec_time];
-        #if value < 2.0:
-           #return -1
-        if value < 5.00:
-          return -1
-        elif value < 7.00:
-          return 10
-        else:
-          return 50
-
+        for i in range(0,10):
+           if self.state[index_exec_time]  >=  self.upper_bound - ((i+1)*self.interval):
+             return map_reward[i]
+        #value = self.exec_time_1l/self.state[index_exec_time];
 
         self.immediate_reward = self.state[0]#Isso seria o IPC
         self.acum_reward += self.immediate_reward
@@ -187,51 +222,62 @@ class EnviromentExample(Env):
         pass
 
     def read_from_scheduler(self):
-        pmu1_str, pmu2_str, pmu3_str, pmu4_str, cpu_usage_little_str, cpu_usage_big_str, state_str, exec_time_str = input().split() #RECEBIMENTO DO ESTADO DA MAIN
+        pmu1_str, pmu2_str, pmu3_str, pmu4_str, cpu_migration_str, context_switch_str, cpu_usage_little_str, cpu_usage_big_str, state_str, exec_time_str = input().split() #RECEBIMENTO DO ESTADO DA MAIN
         pmu1 = float.fromhex(pmu1_str)
         pmu2 = float.fromhex(pmu2_str)
         pmu3 = float.fromhex(pmu3_str)
         pmu4 = float.fromhex(pmu4_str)
+
+        cpu_migration = float.fromhex(cpu_migration_str)
+        context_switch = float.fromhex(context_switch_str)
+
         cpu_usage_little  = float.fromhex(cpu_usage_little_str)
         cpu_usage_big  = float.fromhex(cpu_usage_big_str)
-        current_state = float(state_str)
+
+        if int(state_str) == 3:
+           num_big = 0
+           num_little = 4
+        elif int(state_str) == 7:
+           num_big = 4
+           num_little = 0
+        elif int(state_str) == 23:
+           num_big = 4
+           num_little = 4
+        else:
+           num_big = -1
+           num_little = -1
         exec_time = float(exec_time_str)
 
-        return np.array([pmu1, pmu2, pmu3, pmu4, cpu_usage_little, cpu_usage_big, current_state, exec_time])
+
+        return np.array([pmu1, pmu2, pmu3, pmu4, cpu_migration, context_switch, cpu_usage_little, cpu_usage_big, num_little, num_big, exec_time])
 
     def write_to_scheduler(self, action):
         print (action)
 
 
     def save_model(self):
-        model.save("ppo2_model") 
+        model.save("dqn_model") 
 
 
 
 env = DummyVecEnv([lambda: EnviromentExample()])
-model = PPO2(policy="MlpPolicy", tensorboard_log="./ppo2_tensorborad/",env=env,learning_rate=0.00025, lam=0.8, n_steps=30, nminibatches=1)
-#model = DQN(policy="MlpPolicy", tensorboard_log="./dqn_tensorborad2/", batch_size=1, gamma=0.1, exploration_fraction=0.1, env=env)
-model.learn(total_timesteps=int(1e+4), seed=0)
+#model = PPO2(policy="MlpLstmPolicy", tensorboard_log="./ppo2_tensorborad/",env=env, n_steps=6, nminibatches=1)
+model = DQN(policy="MlpPolicy", tensorboard_log="./dqn_tensorborad/", batch_size=16, env=env)
+model.learn(total_timesteps=int(2.1e+4))
 
 '''
-model = DQN.load("dqn_model.pkl")
+env = DummyVecEnv([lambda: EnviromentExample()])
+model = PPO2.load("ppo2_model.pkl")
 obs = env.reset()
-reward_sum = 0.0
-
 
 while True:
     action, _ = model.predict(obs)
 
-    a = map_action_state[action.item(0)]
-    action2 = np.array([a])
-
-    obs, reward, done, _ = env.step(action2)
-    reward_sum += reward
-    if done :
+    obs, reward, done, _ = env.step(action)
+    if done:
         break
-print("Reward Final:",reward_sum)
+
 
 del model, env
 '''
-
 
