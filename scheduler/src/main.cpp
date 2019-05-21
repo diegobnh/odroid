@@ -10,7 +10,7 @@
 #include <linux/limits.h>
 #include "perf.hpp"
 #include "time.hpp"
-#include "states.h" //Diego
+#include "states.h" 
 
 #ifndef SCHEDULER_TYPE
 #   error Please define SCHEDULER_TYPE
@@ -24,9 +24,13 @@
 #define SCHEDULER_TYPE_PREDICTOR 1
 #define SCHEDULER_TYPE_AGENT 2
 
+#define INTERVAL_SCHEDULE 1e+6 //microseconds 1e+6 microseconds == 1 seconds 
+#define NUM_EXECUTIONS 2000
+
 char** environ;
 
 static FILE* collect_stream = 0;
+static FILE* cpu_utilization_stream = 0;
 static int scheduler_input_pipe = -1;
 static int scheduler_output_pipe = -1;
 static int scheduler_pid = -1;
@@ -36,6 +40,7 @@ static uint64_t application_start_time = 0;
 
 static State current_state;
 
+static int num_time_steps = 0;
 
 void get_cpu_usage(double *cpu_usage)
 {
@@ -49,8 +54,8 @@ void get_cpu_usage(double *cpu_usage)
     int count = 0;
     char buffer[256];
     sprintf(buffer, "ps -p %d -mo pcpu,psr", ::application_pid);
-    FILE* stream = popen(buffer, "r");
-    if(!stream)
+    cpu_utilization_stream = popen(buffer, "r");
+    if(!cpu_utilization_stream)
     {
         perror("failed to collect cpu usage");
         cpu_usage[0] = 0.0;
@@ -66,7 +71,7 @@ void get_cpu_usage(double *cpu_usage)
     buffer[0] = 0;
     while(count == 0 || buffer[count-1] != '\n')
     {
-        if(!fgets(&buffer[count], sizeof(buffer), stream))
+        if(!fgets(&buffer[count], sizeof(buffer), cpu_utilization_stream))
             break;
         count = strlen(buffer);
     }
@@ -76,7 +81,7 @@ void get_cpu_usage(double *cpu_usage)
     buffer[0] = 0;
     while(count == 0 || buffer[count-1] != '\n')
     {
-        if(!fgets(&buffer[count], sizeof(buffer), stream))
+        if(!fgets(&buffer[count], sizeof(buffer), cpu_utilization_stream))
             break;
         count = strlen(buffer);
     }
@@ -88,7 +93,7 @@ void get_cpu_usage(double *cpu_usage)
         buffer[0] = 0;
         while(count == 0 || buffer[count-1] != '\n')
         {
-            if(!fgets(&buffer[count], sizeof(buffer), stream))
+            if(!fgets(&buffer[count], sizeof(buffer), cpu_utilization_stream))
                 break;
             count = strlen(buffer);
         }
@@ -106,11 +111,11 @@ void get_cpu_usage(double *cpu_usage)
             total_cluster_big += row_cpu_usage;
     }
 
-    fclose(stream);
+    fclose(cpu_utilization_stream);
 
     cpu_usage[0] = total_cluster_little;
     cpu_usage[1] = total_cluster_big;
-    fprintf(stderr, "%lf\t %lf\n", cpu_usage[0], cpu_usage[1]);
+    //fprintf(stderr, "%lf\t %lf\n", cpu_usage[0], cpu_usage[1]);
 }
 
 
@@ -234,6 +239,7 @@ static bool create_time_file(uint64_t time_ms)
         return false;
     }
     fprintf(time_stream, "%" PRIu64, time_ms);
+    fprintf(time_stream, "\n");
     return true;
 }
 
@@ -325,18 +331,24 @@ static void update_scheduler()
         total_pmu_1 += hw_data.pmu_1;   //cycles
         total_pmu_2 += hw_data.pmu_2;   //instructions
         total_pmu_3 += hw_data.pmu_3;   //cache_misses
-        total_pmu_4 += hw_data.pmu_4;   //branch_inst
-        total_pmu_5 += hw_data.pmu_5;   //branch_miss
+        total_pmu_4 += hw_data.pmu_4;   //bus access
+        total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
+
     }
 
+    const auto sw_data = perf_consume_sw();
+
+    const double total_sw_1 = (double)sw_data.cpu_migrations;
+    const double total_sw_2 = (double)sw_data.context_switches;
+
     const uint64_t elapsed_time = to_millis(get_time() - ::application_start_time);
-    const double mkpi = ((double)(total_pmu_3) / (double)(total_pmu_2)) * 1000.0;
-    const double bmiss = double(total_pmu_5) / double(total_pmu_4);
+    const double cache_misses = ((double)(total_pmu_3) / (double)(total_pmu_2));
+    const double bus_access = double(total_pmu_4) / double(total_pmu_2);
+    const double l2_cache_refill =  double(total_pmu_5) / double(total_pmu_2);
     const double ipc = double(total_pmu_2) / double(total_pmu_1);
 
     State next_state = current_state;
     //double next_state_mips = 0.0; Diego
-
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
 
@@ -346,21 +358,21 @@ static void update_scheduler()
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT  //Diego
     int state_index_reply;
     float exec_time = -1.0;
-    send_to_scheduler("%a %a %a %a %a %d %f", mkpi, bmiss, ipc, cpu_usage[0], cpu_usage[1], current_state, exec_time);
-    recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate
-    next_state = static_cast<State>(state_index_reply);
 
+    send_to_scheduler("%a %a %a %a %a %a %a %a %d %f", ipc, cache_misses, bus_access, l2_cache_refill, total_sw_1, total_sw_2, cpu_usage[0], cpu_usage[1], current_state, exec_time);
+    recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate
+    ::num_time_steps += 1;
+    //printf("Recebido do agente:%d\n",state_index_reply); 
+    next_state = static_cast<State>(state_index_reply);
 #endif
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
     if(::application_pid == -1) // end of episode
     {
         exec_time = to_millis(get_time() - ::application_start_time);
-        //fprintf(stderr, "%f",exec_time);
-        send_to_scheduler("%a %a %a %a %a %d %f", 0.0, 0.0, 0.0, 0.0, 0.0,  -1, exec_time);
+        send_to_scheduler("%a %a %a %a %a %a %a %a %d %f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1, exec_time);
         recv_from_scheduler("%d", &state_index_reply);
         next_state = static_cast<State>(state_index_reply);
-
         create_time_file(exec_time);
     }
 #endif
@@ -411,16 +423,18 @@ int main(int argc, char* argv[])
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
-    const int num_episodes = 3; // Agent runs multiple episodes
+
     if(!spawn_scheduling_process("python3 ./agent.py"))
     {
         cleanup();
         return 1;
     }
+    sleep(60);//time to wait for the agent to load their libraries and be ready to make decisions.
+    fprintf(stderr, "Total of episodios: %d\n", NUM_EXECUTIONS);
 #endif
-
-    for(int curr_episode = 0; curr_episode < num_episodes; ++curr_episode)
+    for(int curr_episode = 0; curr_episode < NUM_EXECUTIONS; ++curr_episode)
     {
+
         perf_init();
 
         if(!spawn_scheduled_application(&argv[1]))
@@ -429,11 +443,14 @@ int main(int argc, char* argv[])
             return 1;
         }
 
+        fprintf(stderr, " \n");
+        fprintf(stderr, " \n");
         fprintf(stderr, "scheduler: starting episode %d with pid %d\n", curr_episode + 1, application_pid);
+        fprintf(stderr, " \n");
+        fprintf(stderr, " \n");
 
         while(::application_pid != -1)
         {
-            usleep(20000); // 20ms
 
             int pid = waitpid(::application_pid, NULL, WNOHANG);
             if(pid == -1)
@@ -450,6 +467,9 @@ int main(int argc, char* argv[])
             {
                 update_scheduler();
             }
+
+            usleep(INTERVAL_SCHEDULE);
+
         }
 
         perf_shutdown();
@@ -459,7 +479,7 @@ int main(int argc, char* argv[])
         #endif
 
 
-        fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
+        //fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }
 
     cleanup();
