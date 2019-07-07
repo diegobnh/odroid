@@ -29,7 +29,7 @@ enum State
     STATE_4l4b,  //index 23
 };
 
-extern const char *configs[]={"0",
+const char *configs[]={"0",
 		        "0-1",
 		        "0-2",
 		        "0-3", 
