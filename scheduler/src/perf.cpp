@@ -14,7 +14,7 @@
 ///
 /// The Cortex A7 is a limiting factor here because it contains
 /// only four performance counting registers.
-constexpr int MAX_EVENTS_PER_GROUP = 5;
+constexpr int MAX_EVENTS_PER_GROUP = 7;
 
 /// Maximum number of processor cores we are going to use.
 constexpr int MAX_PROCESSORS = 8;
@@ -30,7 +30,7 @@ struct PerfEvent
 };
 
 static PerfEvent perf_cpu[MAX_PROCESSORS][MAX_EVENTS_PER_GROUP];
-static PerfEvent perf_sw[NUM_SOFTWARE_COUNTERS];
+static PerfEvent perf_sw[MAX_PROCESSORS][NUM_SOFTWARE_COUNTERS];
 static int num_processors;
 
 void perf_init()
@@ -44,7 +44,7 @@ void perf_init()
     num_processors = get_nprocs_conf();
     assert(num_processors <= MAX_PROCESSORS);
     
-    fprintf(stderr, "scheduler: detected %d processors\n", num_processors);
+    //fprintf(stderr, "scheduler: detected %d processors\n", num_processors);
 
     for(int cpu = 0; cpu < num_processors; ++cpu)
     {
@@ -52,39 +52,62 @@ void perf_init()
         {
             uint64_t config;
             int group_fd;
+            struct perf_event_attr pe;
+            memset(&pe, 0, sizeof(pe));
+
 
             switch(i)
             {
                 case 0:
 		    config = PERF_COUNT_HW_CPU_CYCLES;
+                    pe.type = PERF_TYPE_HARDWARE;
 		    group_fd = -1;
 		    break;
                 case 1:
 		    config = PERF_COUNT_HW_INSTRUCTIONS;
+                    pe.type = PERF_TYPE_HARDWARE;
 		    group_fd = perf_cpu[cpu][0].fd;
 		    break;
                 case 2:
 		    config = PERF_COUNT_HW_CACHE_MISSES;
+                    pe.type = PERF_TYPE_HARDWARE;
 		    group_fd = perf_cpu[cpu][0].fd;
 		    break;
 		case 3:
-		    config = PERF_COUNT_HW_BRANCH_INSTRUCTIONS;
+		    //config = PERF_COUNT_HW_BRANCH_INSTRUCTIONS;
+                    config = 0x19; //bus access
+                    pe.type = PERF_TYPE_RAW;
 		    group_fd = perf_cpu[cpu][0].fd;
 		    break;
 		case 4:
-		    config = PERF_COUNT_HW_BRANCH_MISSES;
+		    //config = PERF_COUNT_HW_BRANCH_MISSES;
+                    config = 0x17; //l2 cache refill
+                    pe.type = PERF_TYPE_RAW;
 		    group_fd = perf_cpu[cpu][0].fd;
 		    break;
-                default:
+                case 5:
+                    if(cpu >= 0 && cpu <= 3) // little
+                        goto notsup;
+                    config = 0x17; //l2 cache refill
+                    pe.type = PERF_TYPE_RAW;
+		    group_fd = perf_cpu[cpu][0].fd;
+                    break;
+                case 6:
+                    if(cpu >= 0 && cpu <= 3) // little
+                        goto notsup;
+                    config = 0x17; //l2 cache refill
+                    pe.type = PERF_TYPE_RAW;
+		    group_fd = perf_cpu[cpu][0].fd;
+                    break;
+                notsup: default:
+                    pe.type = PERF_TYPE_HARDWARE;
 		    perf_cpu[cpu][i].fd = -1;
 		    perf_cpu[cpu][i].id = -1;
 		    continue;
             }
 
-            struct perf_event_attr pe;
-            memset(&pe, 0, sizeof(pe));
             pe.size = sizeof(pe);
-            pe.type = PERF_TYPE_HARDWARE;
+            //pe.type = PERF_TYPE_HARDWARE;
             pe.config = config;
             pe.exclude_hv = true;
             pe.exclude_kernel = true;
@@ -104,50 +127,56 @@ void perf_init()
             perf_cpu[cpu][i].prev_value = 0;
         }
     }
-
-    for(int i = 0; i < NUM_SOFTWARE_COUNTERS; ++i)
+ 
+    for(int cpu = 0; cpu < num_processors; ++cpu)
     {
-	uint64_t config;
-	int group_fd;
 
-	switch(i)
-	{
-	    case 0:
-		config = PERF_COUNT_SW_CPU_MIGRATIONS;
-		group_fd = -1;
-		break;
-	    case 1:
-		config = PERF_COUNT_SW_CONTEXT_SWITCHES;
-		group_fd = perf_sw[0].fd;
-		break;
-	    default:
-		perf_sw[i].fd = -1;
-		perf_sw[i].id = -1;
-		continue;
-	}
+        for(int i = 0; i < NUM_SOFTWARE_COUNTERS; ++i)
+        {
+                uint64_t config;
+                int group_fd;
 
-	struct perf_event_attr pe;
-	memset(&pe, 0, sizeof(pe));
-	pe.size = sizeof(pe);
-	pe.type = PERF_TYPE_SOFTWARE;
-	pe.config = config;
-	pe.exclude_hv = true;
-	pe.exclude_kernel = false;
-	pe.disabled = true;
-	pe.read_format = PERF_FORMAT_ID | PERF_FORMAT_GROUP;
+                switch(i)
+                {
+                        case 0:
+	                        config = PERF_COUNT_SW_CPU_MIGRATIONS;
+	                        group_fd = -1;
+                                //group_fd = perf_sw[cpu][0].fd;
+	                        break;
+                        case 1:
+	                        config = PERF_COUNT_SW_CONTEXT_SWITCHES;
+	                        group_fd = perf_sw[cpu][0].fd;
+	                        break;
+                        default:
+	                        perf_sw[cpu][i].fd = -1;
+	                        perf_sw[cpu][i].id = -1;
+	                        continue;
+                }
 
-	const auto fd = perf_event_open(&pe, 0, -1, group_fd, 0);
-	if(fd == -1)
-	{
-	    perror("scheduler: failed to initialise perf");
-	    abort();
-	}
+                struct perf_event_attr pe;
+                memset(&pe, 0, sizeof(pe));
+                pe.size = sizeof(pe);
+                pe.type = PERF_TYPE_SOFTWARE;
+                pe.config = config;
+                pe.exclude_hv = true;
+                pe.exclude_kernel = false;
+                pe.disabled = true;
+                pe.read_format = PERF_FORMAT_ID | PERF_FORMAT_GROUP;
 
-	perf_sw[i].fd = fd;
-	ioctl(fd, PERF_EVENT_IOC_ID, &perf_sw[i].id);
-	ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-	perf_sw[i].prev_value = 0;
+                const auto fd = perf_event_open(&pe, -1, cpu, group_fd, 0);
+                if(fd == -1)
+                {
+                     perror("scheduler: failed to initialise perf");
+                     abort();
+                }
+
+                perf_sw[cpu][i].fd = fd;
+                ioctl(fd, PERF_EVENT_IOC_ID, &perf_sw[cpu][i].id);
+                ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+                perf_sw[cpu][i].prev_value = 0;
+          }
     }
+
 
     for(int cpu = 0; cpu < num_processors; ++cpu)
     {
@@ -155,9 +184,9 @@ void perf_init()
         ioctl(leader_fd, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
     }
 
-    if(true)
+    for(int cpu = 0; cpu < num_processors; ++cpu)
     {
-        const auto leader_fd = perf_sw[0].fd;
+        const auto leader_fd = perf_sw[cpu][0].fd;
         ioctl(leader_fd, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
     }
 }
@@ -179,12 +208,17 @@ void perf_shutdown()
         }
     }
 
-    for(int i = 0; i < NUM_SOFTWARE_COUNTERS; ++i)
+
+    for(int cpu = 0; cpu < num_processors; ++cpu)
     {
-	close(perf_sw[i].fd);
-	perf_sw[i].fd = -1;
-	perf_sw[i].id = -1;
-	perf_sw[i].prev_value = 0;
+
+        for(int i = 0; i < NUM_SOFTWARE_COUNTERS; ++i)
+        {
+            close(perf_sw[cpu][i].fd);
+            perf_sw[cpu][i].fd = -1;
+            perf_sw[cpu][i].id = -1;
+            perf_sw[cpu][i].prev_value = 0;
+        }
     }
 }
 
@@ -252,10 +286,12 @@ auto perf_consume_hw(int cpu) -> PerfHardwareData
         counters[2],
         counters[3],
 	counters[4],
+        counters[5],
+        counters[6],
     };
 }
 
-auto perf_consume_sw() -> PerfSoftwareData
+auto perf_consume_sw(int cpu) -> PerfSoftwareData
 {
     struct
     {
@@ -266,7 +302,9 @@ auto perf_consume_sw() -> PerfSoftwareData
         } values[NUM_SOFTWARE_COUNTERS];
     } data;
 
-    const auto fd = perf_sw[0].fd;
+    assert(cpu < num_processors);
+
+    const auto fd = perf_sw[cpu][0].fd;
 
     if(fd == -1)
         return PerfSoftwareData{};
@@ -284,10 +322,10 @@ auto perf_consume_sw() -> PerfSoftwareData
     {
         for(int pi = 0; pi < NUM_SOFTWARE_COUNTERS; ++pi)
         {
-            if(data.values[s].id == perf_sw[pi].id)
+            if(data.values[s].id == perf_sw[cpu][pi].id)
             {
                 const auto value = data.values[s].value;
-                const auto prev_value = perf_sw[pi].prev_value;
+                const auto prev_value = perf_sw[cpu][pi].prev_value;
                 const auto u64_max = std::numeric_limits<uint64_t>::max();
 
                 if(value >= prev_value)
@@ -301,7 +339,7 @@ auto perf_consume_sw() -> PerfSoftwareData
                     counters[pi] += value;
                 }
 
-                perf_sw[pi].prev_value = value;
+                perf_sw[cpu][pi].prev_value = value;
             }
         }
     }
