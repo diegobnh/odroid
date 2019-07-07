@@ -24,8 +24,6 @@
 #define SCHEDULER_TYPE_PREDICTOR 1
 #define SCHEDULER_TYPE_AGENT 2
 
-#define INTERVAL_SCHEDULE 3443785 //1e+6 microseconds == 1 second    3443785
-
 char** environ;
 
 static FILE* collect_stream = 0;
@@ -224,7 +222,7 @@ static bool create_logging_file()
         return false;
     }
     fprintf(stderr, "scheduler: collecting to file %s\n", filename);
-    fprintf(collect_stream, "#ElapsedTime,pmu1,pmu2,pmu3,pmu4,pmu5,CpuMigration,ContextSwitch,LittleClusterUtilization,BigClusterUtilization\n") ;
+    fprintf(collect_stream, "#ElapsedTime,L_pmu1,L_pmu2,L_pmu3,L_pmu4,L_pmu5,B_pmu1,B_pmu2,B_pmu3,B_pmu4,B_pmu5,B_pmu6,B_pmu7,CpuMigration,ContextSwitch,LittleUtilization,BigUtilization\n") ;
 
     return true;
 }
@@ -319,69 +317,82 @@ static void update_scheduler()
     double cpu_usage[2];
     get_cpu_usage(cpu_usage);
 
-    uint64_t total_pmu_1 = 0;
-    uint64_t total_pmu_2 = 0;
-    uint64_t total_pmu_3 = 0;
-    uint64_t total_pmu_4 = 0;
-    uint64_t total_pmu_5 = 0;
-    uint64_t total_pmu_6 = 0;
-    uint64_t total_pmu_7 = 0;
 
-    for(int cpu = 0; cpu <= 3; ++cpu)
+    uint64_t l_total_pmu_1 = 0;
+    uint64_t l_total_pmu_2 = 0;
+    uint64_t l_total_pmu_3 = 0;
+    uint64_t l_total_pmu_4 = 0;
+    uint64_t l_total_pmu_5 = 0;
+
+    uint64_t b_total_pmu_1 = 0;
+    uint64_t b_total_pmu_2 = 0;
+    uint64_t b_total_pmu_3 = 0;
+    uint64_t b_total_pmu_4 = 0;
+    uint64_t b_total_pmu_5 = 0;
+    uint64_t b_total_pmu_6 = 0;
+    uint64_t b_total_pmu_7 = 0;
+
+
+    for(int cpu = START_INDEX_LITTLE; cpu <= END_INDEX_LITTLE; ++cpu)
     {
         const auto hw_data = perf_consume_hw(cpu);
-        total_pmu_1 += hw_data.pmu_1;   //cycles
-        total_pmu_2 += hw_data.pmu_2;   //instructions
-        total_pmu_3 += hw_data.pmu_3;   //cache_misses
-        total_pmu_4 += hw_data.pmu_4;   //bus access
-        total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
-    }
-    for(int cpu = 4; cpu <= 7; ++cpu)
-    {
-        const auto hw_data = perf_consume_hw(cpu);
-        total_pmu_1 += hw_data.pmu_1;   //cycles
-        total_pmu_2 += hw_data.pmu_2;   //instructions
-        total_pmu_3 += hw_data.pmu_3;   //cache_misses
-        total_pmu_4 += hw_data.pmu_4;   //bus access
-        total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
-        total_pmu_6 += hw_data.pmu_6;   //l2 cache refill
-        total_pmu_7 += hw_data.pmu_7;   //l2 cache refill
+        l_total_pmu_1 += hw_data.pmu_1;   //cycles
+        l_total_pmu_2 += hw_data.pmu_2;   //instructions
+        l_total_pmu_3 += hw_data.pmu_3;   //cache_misses
+        l_total_pmu_4 += hw_data.pmu_4;   //bus access
+        l_total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
+
     }
 
-    double total_sw_1 = 0;
-    double total_sw_2 = 0;
+    for(int cpu = START_INDEX_BIG; cpu < END_INDEX_BIG; ++cpu)
+    {
+        const auto hw_data = perf_consume_hw(cpu);
+        b_total_pmu_1 += hw_data.pmu_1;   //cycles
+        b_total_pmu_2 += hw_data.pmu_2;   //instructions
+        b_total_pmu_3 += hw_data.pmu_3;   //cache_misses
+        b_total_pmu_4 += hw_data.pmu_4;   //bus access
+        b_total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
+        b_total_pmu_6 += hw_data.pmu_6;   //bus access
+        b_total_pmu_7 += hw_data.pmu_7;   //l2 cache refill
+
+    }
+
+    double total_cpu_migration = 0;
+    double total_context_switch = 0;
 
 
     for(int cpu = 0, max_cpu = perf_nprocs(); cpu < max_cpu; ++cpu)
     {
         const auto sw_data = perf_consume_sw(cpu);
-        total_sw_1 += sw_data.cpu_migrations;
-        total_sw_2 += sw_data.context_switches;
-        //fprintf(stderr, "%" PRIu64 "\t", sw_data.cpu_migrations); //show cpu migration per core
-
+        total_cpu_migration += sw_data.cpu_migrations;
+        total_context_switch += sw_data.context_switches;
     }
 
-    //fprintf(stderr, "CPU migration:%lf\n", total_sw_1);
-
     const uint64_t elapsed_time = to_millis(get_time() - ::application_start_time);
-    const double cache_misses = ((double)(total_pmu_3) / (double)(total_pmu_2));
-    const double bus_access = double(total_pmu_4) / double(total_pmu_2);
-    const double l2_cache_refill =  double(total_pmu_5) / double(total_pmu_2);
-    const double ipc = double(total_pmu_2) / double(total_pmu_1);
-
     State next_state = current_state;
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
 
-    fprintf(collect_stream, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%.2lf,%.2lf,%.2lf,%.2lf\n" , 
-            elapsed_time, total_pmu_1, total_pmu_2, total_pmu_3, total_pmu_4, total_pmu_5, total_pmu_6, total_pmu_7, total_sw_1, total_sw_2, cpu_usage[0], cpu_usage[1]);
+    fprintf(collect_stream, "%" PRIu64 \
+                            ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 \
+                            ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 \
+                            ",%.2lf,%.2lf,%.2lf,%.2lf\n" ,
+                            elapsed_time, \
+                            l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
+                            b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
+                            total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
 
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT  
     int state_index_reply;
     float exec_time = -1.0;
 
     //fprintf(stderr, "%lf %lf %lf %lf %lf %lf %lf %lf %d %f\n", ipc, cache_misses, bus_access, l2_cache_refill, total_sw_1, total_sw_2, cpu_usage[0], cpu_usage[1], current_state, exec_time);
-    send_to_scheduler("%a %a %a %a %a %a %a %a %d %f", ipc, cache_misses, bus_access, l2_cache_refill, total_sw_1, total_sw_2, cpu_usage[0], cpu_usage[1], current_state, exec_time);
+    send_to_scheduler("%a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %d %f", \
+                      l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
+                      b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
+                      total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1], \
+                      current_state, exec_time);
+
     recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate
     ::num_time_steps += 1;
     //printf("Recebido do agente:%d\n",state_index_reply); 
@@ -434,7 +445,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
-    const int num_episodes = 10007;
+    const int num_episodes = 3;
     if(!spawn_scheduling_process("python3 ./agent.py"))
     {
         cleanup();
@@ -482,7 +493,8 @@ int main(int argc, char* argv[])
                 if(::application_pid == -1) // end of episode
                 {
                      exec_time = to_millis(get_time() - ::application_start_time);
-                     send_to_scheduler("%a %a %a %a %a %a %a %a %d %f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1, exec_time);
+                     send_to_scheduler("%a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %d %f", \
+                                        0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0, -1, exec_time);
                      recv_from_scheduler("%d", &state_index_reply);
                      //create_time_file(exec_time);
                 }
@@ -493,7 +505,7 @@ int main(int argc, char* argv[])
                 update_scheduler();
             }
 
-            usleep(1000000);
+            usleep(200000);
 
         }
 
