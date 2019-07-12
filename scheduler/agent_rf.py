@@ -179,7 +179,7 @@ class EnviromentExample(Env):
         else:
            reward = self.get_immediate_reward()
            output=""
-           for value_state in range(17):
+           for value_state in range(total_observation_space):
                 aux1 = "str(\"{0:.2f}\".format(self.state["   
                 aux2 = "])) + \"  \" + "
                 sample = aux1 + str(value_state) + aux2
