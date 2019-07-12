@@ -158,6 +158,20 @@ class EnviromentExample(Env):
 
         cpu_usage_little  = float.fromhex(cpu_usage_little_str)
         cpu_usage_big  = float.fromhex(cpu_usage_big_str)
+	
+	if int(state_str) == 3:
+           num_big = 0
+           num_little = 4
+        elif int(state_str) == 7:
+           num_big = 4
+           num_little = 0
+        elif int(state_str) == 23:
+           num_big = 4
+           num_little = 4
+        else:
+           num_big = -1
+           num_little = -1
+        exec_time = float(exec_time_str)
 
 	return np.array([L_pmu1, L_pmu2, L_pmu3, L_pmu4, L_pm5, \
 			 B_pmu1, B_pmu2, B_pmu3, B_pmu4, B_pmu5,B_pmu6, B_pmu7, \
