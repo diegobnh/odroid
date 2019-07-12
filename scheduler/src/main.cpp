@@ -8,9 +8,13 @@
 #include <sys/wait.h>
 #include <sys/prctl.h>
 #include <linux/limits.h>
+#include <signal.h> 
 #include "perf.hpp"
 #include "time.hpp"
-#include "states.hpp"
+#include "states.hpp" 
+
+#define FLAG_ONLY_PARALLEL_REGION 0
+
 
 #ifndef SCHEDULER_TYPE
 #   error Please define SCHEDULER_TYPE
@@ -33,11 +37,10 @@ static int scheduler_output_pipe = -1;
 static int scheduler_pid = -1;
 static int application_pid = -1;
 static uint64_t application_start_time = 0;
-
-
 static State current_state;
-
 static int num_time_steps = 0;
+static int flag_update_schedule;
+
 
 void get_cpu_usage(double *cpu_usage)
 {
@@ -289,7 +292,7 @@ static bool spawn_agent(const char* command)
     }
 }
 
-static bool spawn_scheduled_application(char* argv[])
+static bool spawn_application(char* argv[])
 {
     int pid = fork();
     if(pid == -1)
@@ -310,6 +313,31 @@ static bool spawn_scheduled_application(char* argv[])
         ::current_state = STATE_4b;
         return true;
     }
+}
+
+
+static void update_scheduler_to_serial_region()
+{
+    if(::application_pid != -1 && current_state != STATE_4b)
+    {
+        char buffer[512];
+        auto cfg = configs[STATE_4b];
+
+        sprintf(buffer, "taskset -pac %s %d >/dev/null", cfg, application_pid);
+
+        int status = system(buffer);
+        if(status == -1)
+        {
+            perror("scheduler: system() failed");
+        }
+        else if(status != 0)
+        {
+            fprintf(stderr, "scheduler: taskset returned %d :(\n", status);
+        }
+
+        current_state = STATE_4b;
+    }
+
 }
 
 static void update_scheduler()
@@ -386,7 +414,6 @@ static void update_scheduler()
     int state_index_reply;
     float exec_time = -1.0;
 
-    //fprintf(stderr, "%lf %lf %lf %lf %lf %lf %lf %lf %d %f\n", ipc, cache_misses, bus_access, l2_cache_refill, total_sw_1, total_sw_2, cpu_usage[0], cpu_usage[1], current_state, exec_time);
     send_to_scheduler("%a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %d %f", \
                       l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
                       b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
@@ -395,7 +422,6 @@ static void update_scheduler()
 
     recv_from_scheduler("%d", &state_index_reply);//Here is State enumerate
     ::num_time_steps += 1;
-    //printf("Recebido do agente:%d\n",state_index_reply); 
     next_state = static_cast<State>(state_index_reply);
 #endif
 
@@ -422,8 +448,40 @@ static void update_scheduler()
     }
 }
 
+
+void sig_handler(int signo)
+{
+    if (signo == SIGUSR1){
+       //fprintf(stderr, "received SIGUSR1\n");
+#if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+        if(FLAG_ONLY_PARALLEL_REGION == 1){
+             update_scheduler();
+             ::flag_update_schedule = 0;
+        }
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+        update_scheduler();
+#endif
+
+    }
+    else if (signo == SIGUSR2){
+       //fprintf(stderr, "received SIGUSR2\n"); 
+#if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+       ::flag_update_schedule = 1;
+       fprintf(collect_stream, "\n"); 
+       update_scheduler_to_serial_region();
+#endif
+
+    }
+}
+
+
 int main(int argc, char* argv[])
 {
+
+    ::flag_update_schedule = FLAG_ONLY_PARALLEL_REGION ;
+    signal(SIGUSR1, sig_handler);
+    signal(SIGUSR2, sig_handler);
+
     if(argc < 2)
     {
         fprintf(stderr, "usage: %s command args...\n", argv[0]);
@@ -460,13 +518,13 @@ int main(int argc, char* argv[])
 
         perf_init();
 
-        if(!spawn_scheduled_application(&argv[1]))
+        if(!spawn_application(&argv[1]))
         {
             cleanup();
             return 1;
         }
 
-        fprintf(stderr, "\n\nscheduler: starting episode %d with pid %d\n\n\n", curr_episode + 1, application_pid);
+        fprintf(stderr, "\n\nscheduler: starting episode %d with pid %d\n\n", curr_episode + 1, application_pid);
 
         while(::application_pid != -1)
         {
@@ -495,17 +553,22 @@ int main(int argc, char* argv[])
                 }
                 #endif
             }
-            else
+            #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+            else if(!(flag_update_schedule == 1))
             {
                 update_scheduler();
             }
-
+            #endif
             usleep(200000);
-
         }
 
         perf_shutdown();
 
+        #if SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+              //create_time_file(to_millis(get_time() - ::application_start_time));
+        #endif
+
+        //usleep(1000000000); //only to clear anything in cpu
         //fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }
 
