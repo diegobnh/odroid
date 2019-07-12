@@ -139,18 +139,18 @@ void perf_init()
                 switch(i)
                 {
                         case 0:
-	                        config = PERF_COUNT_SW_CPU_MIGRATIONS;
-	                        group_fd = -1;
-                                //group_fd = perf_sw[cpu][0].fd;
-	                        break;
+	                    config = PERF_COUNT_SW_CPU_MIGRATIONS;
+	                    group_fd = -1;
+                            //group_fd = perf_sw[cpu][0].fd;
+	                    break;
                         case 1:
-	                        config = PERF_COUNT_SW_CONTEXT_SWITCHES;
-	                        group_fd = perf_sw[cpu][0].fd;
-	                        break;
+	                    config = PERF_COUNT_SW_CONTEXT_SWITCHES;
+	                    group_fd = perf_sw[cpu][0].fd;
+	                    break;
                         default:
-	                        perf_sw[cpu][i].fd = -1;
-	                        perf_sw[cpu][i].id = -1;
-	                        continue;
+	                    perf_sw[cpu][i].fd = -1;
+	                    perf_sw[cpu][i].id = -1;
+	                    continue;
                 }
 
                 struct perf_event_attr pe;
