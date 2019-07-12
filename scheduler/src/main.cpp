@@ -466,8 +466,10 @@ void sig_handler(int signo)
     else if (signo == SIGUSR2){
        //fprintf(stderr, "received SIGUSR2\n"); 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
-       ::flag_update_schedule = 1;
-       fprintf(collect_stream, "\n"); 
+       if(FLAG_ONLY_PARALLEL_REGION == 1){
+          ::flag_update_schedule = 1;
+          fprintf(collect_stream, "\n"); 
+       }
        update_scheduler_to_serial_region();
 #endif
 
@@ -504,7 +506,10 @@ int main(int argc, char* argv[])
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
     const int num_episodes = 3;
-    if(!spawn_agent("python3 ./agent.py"))
+    char cmd[50];
+    sprintf(cmd, "python3 %s", argv[1]);
+
+    if(!spawn_agent(cmd))
     {
         cleanup();
         return 1;
@@ -518,7 +523,11 @@ int main(int argc, char* argv[])
 
         perf_init();
 
+#if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
         if(!spawn_application(&argv[1]))
+#elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+        if(!spawn_application(&argv[2]))
+#endif
         {
             cleanup();
             return 1;
@@ -559,7 +568,7 @@ int main(int argc, char* argv[])
                 update_scheduler();
             }
             #endif
-            usleep(200000);
+            usleep(200000);//20 miliseconds
         }
 
         perf_shutdown();
