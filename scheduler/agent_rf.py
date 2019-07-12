@@ -232,20 +232,19 @@ class EnviromentExample(Env):
         L_pmu1_str, L_pmu2_str, L_pmu3_str, L_pmu4_str, L_pmu5_str, \
 	B_pmu1_str, B_pmu2_str, B_pmu3_str, B_pmu4_str, B_pmu5_str,B_pmu6_str, B_pmu7_str, \
 	cpu_migration_str, context_switch_str, cpu_usage_little_str, cpu_usage_big_str, state_str, exec_time_str = input().split() #RECEBIMENTO DO ESTADO DA MAIN
-        
-	L_pmu1 = float.fromhex(L_pmu1_str)
+
+        L_pmu1 = float.fromhex(L_pmu1_str)
         L_pmu2 = float.fromhex(L_pmu2_str)
         L_pmu3 = float.fromhex(L_pmu3_str)
         L_pmu4 = float.fromhex(L_pmu4_str)
-	L_pmu5 = float.fromhex(L_pmu5_str)
-	
-	B_pmu1 = float.fromhex(B_pmu1_str)
+        L_pmu5 = float.fromhex(L_pmu5_str)
+        B_pmu1 = float.fromhex(B_pmu1_str)
         B_pmu2 = float.fromhex(B_pmu2_str)
         B_pmu3 = float.fromhex(B_pmu3_str)
         B_pmu4 = float.fromhex(B_pmu4_str)
-	B_pmu5 = float.fromhex(B_pmu5_str)
+        B_pmu5 = float.fromhex(B_pmu5_str)
         B_pmu6 = float.fromhex(B_pmu6_str)
-	B_pmu7 = float.fromhex(B_pmu7_str)
+        B_pmu7 = float.fromhex(B_pmu7_str)
 
         cpu_migration = float.fromhex(cpu_migration_str)
         context_switch = float.fromhex(context_switch_str)
