@@ -10,7 +10,7 @@
 #include <linux/limits.h>
 #include "perf.hpp"
 #include "time.hpp"
-#include "states.hpp" 
+#include "states.hpp"
 
 #ifndef SCHEDULER_TYPE
 #   error Please define SCHEDULER_TYPE
@@ -242,7 +242,7 @@ static bool create_time_file(uint64_t time_ms)
     return true;
 }
 
-static bool spawn_scheduling_process(const char* command)
+static bool spawn_agent(const char* command)
 {
     int inpipefd[2] = {-1, -1};
     int outpipefd[2] = {-1, -1};
@@ -307,7 +307,7 @@ static bool spawn_scheduled_application(char* argv[])
     {
         ::application_pid = pid;
         ::application_start_time = get_time();
-        ::current_state = STATE_4l4b;
+        ::current_state = STATE_4b;
         return true;
     }
 }
@@ -439,14 +439,14 @@ int main(int argc, char* argv[])
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR
     const int num_episodes = 1; // Predictor should run a single episode
-    if(!spawn_scheduling_process("python3 ./predictor.py"))
+    if(!spawn_agent("python3 ./predictor.py"))
     {
         cleanup();
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
     const int num_episodes = 3;
-    if(!spawn_scheduling_process("python3 ./agent.py"))
+    if(!spawn_agent("python3 ./agent.py"))
     {
         cleanup();
         return 1;
@@ -466,11 +466,7 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        fprintf(stderr, " \n");
-        fprintf(stderr, " \n");
-        fprintf(stderr, "scheduler: starting episode %d with pid %d\n", curr_episode + 1, application_pid);
-        fprintf(stderr, " \n");
-        fprintf(stderr, " \n");
+        fprintf(stderr, "\n\nscheduler: starting episode %d with pid %d\n\n\n", curr_episode + 1, application_pid);
 
         while(::application_pid != -1)
         {
@@ -485,7 +481,6 @@ int main(int argc, char* argv[])
             {
                 assert(pid == ::application_pid);
                 application_pid = -1;
-                //update_scheduler();
 
                 #if SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
                 float exec_time;
@@ -511,11 +506,6 @@ int main(int argc, char* argv[])
 
         perf_shutdown();
 
-        #if SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
-              //create_time_file(to_millis(get_time() - ::application_start_time));
-        #endif
-
-        //usleep(1000000000); //only to clear anything in cpu
         //fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }
 
