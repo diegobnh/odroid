@@ -10,10 +10,11 @@ from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.common import set_global_seeds
 import sys
 
+total_observation_space = 18
 eps_stop = 2
 num_actions=3
-index_state=9
-index_exec_time=10
+index_state= total_observation_space -2
+index_exec_time= total_observation_space -1
 max_num_big = 4
 max_num_little = 4
 map_action_state = [3, 7, 23]
@@ -44,19 +45,27 @@ class EnviromentExample(Env):
      Observation:
         Type: Box(11)
         Num	Observation
-        0	pmu1
-        1	pmu2
-        2	pmu3
-        3       pmu4
-        4       cpu_migrations
-        5       context_switches
-        6       cpu usage little
-        7       cpu usage big
-        8       num_little_enabled
-        9       num_big_enabled
-        10      exec_time
-
-
+        0	LITTLE pmu1 
+        1	LITTLE pmu2
+        2	LITTLE pmu3
+        3       LITTLE pmu4
+	4	LITTLE pmu5
+	5	BIG pmu1
+	6	BIG pmu2
+	7	BIG pmu3
+	8	BIG pmu4
+	9	BIG pmu5
+	10	BIG pmu6
+	11	BIG pmu7
+        11      cpu_migrations
+        12      context_switches
+        13      LITTLE cpu usage
+        14      BIG cpu usage
+        15      LITTLE cores enable - this is not send by scheduler 
+	16	BIG cores enable - this is not send by sheduler
+        17      execution time - just control variables
+              
+	
     Actions:
         Type: Discrete(2)
         Num	Action
@@ -68,7 +77,7 @@ class EnviromentExample(Env):
         Reward is 0 for every step taken, except the termination step when receive total reward. In this case o reward total is the execution time
 
     Episode Termination:
-        When observation_space[4] is equal -1. State equal -1 is an agreement code to sinalize the end of execution.
+        When observation_space[4] is equal -1 that means episode has finished. State equal -1 is an agreement code to sinalize the end of execution.
         Episode length is greater than some big value
 
 
@@ -77,7 +86,7 @@ class EnviromentExample(Env):
 
     def __init__(self):
         self.action_space = Discrete(num_actions)
-        self.observation_space = Box(low=-1, high=100000, shape=(11,))
+        self.observation_space = Box(low=-1, high=100000, shape=(total_observation_space,))
         self.dim = num_actions
         self.acum_reward = 0
         self.immediate_reward = 0
@@ -112,8 +121,7 @@ class EnviromentExample(Env):
         ref_arquivo.write("Time_1b " + str(time_1b) + "\n" +  "Time_1l " + str(time_1l) + "\n"  + "Perc.Melhoria_l/b " + str("{0:.6f}".format(time_1l/time_1b)) + "\n")
         ref_arquivo.write("Menor_Tempo_Possivel:" + str(str("{0:.2f}".format(self.lower_bound))) + "\n" + "Maior_tempo_Possível(1l) " + str(str("{0:.2f}".format(self.upper_bound))) + "\n")
         ref_arquivo.write("\n\n")
-        #ref_arquivo.write("\n")
- 
+        #ref_arquivo.write("\n") 
 
     def reset(self):
         self.acum_reward = 0
@@ -126,7 +134,7 @@ class EnviromentExample(Env):
         self.num_steps += 1
         self.total_time_steps +=1
 
-        a = map_action_state[action]
+        config_action = map_action_state[action]
 
         '''
         if self.episodes == 0:
@@ -141,7 +149,7 @@ class EnviromentExample(Env):
             a = 23 #4b4l
         '''
 
-        item = "T"+ str(self.num_steps) + ":" + str(a) 
+        item = "T"+ str(self.num_steps) + ":" + str(config_action) 
         self.action_list.append(item)
 
 
@@ -166,27 +174,26 @@ class EnviromentExample(Env):
               ref_arquivo.close()
 
 
-           self.write_to_scheduler(a) #Escrevendo a última ação do episódio para o escalonador
+           self.write_to_scheduler(config_action) #Escrevendo a última ação do episódio para o escalonador
 
         else:
            reward = self.get_immediate_reward()
-           ref_arquivo.write(str("{0:.6f}".format(self.state[0])) + "  " + \
-                             str("{0:.6f}".format(self.state[1])) + "  " + \
-                             str("{0:.6f}".format(self.state[2])) + "  " + \
-                             str("{0:.6f}".format(self.state[3])) + "  " + \
-                             str("{0:.6f}".format(self.state[4])) + "  " + \
-                             str("{0:.6f}".format(self.state[5])) + "  " + \
-                             str("{0:10.6f}".format(self.state[6])) + "  " + \
-                             str("{0:10.6f}".format(self.state[7])) + "  " + \
-                             str("{0:.2f}".format(self.state[8])) + "  " + \
-                             str("{0:.2f}".format(self.state[9])) + "\n") 
+           output=""
+           for value_state in range(17):
+                aux1 = "str(\"{0:.2f}\".format(self.state["   
+                aux2 = "])) + \"  \" + "
+                sample = aux1 + str(value_state) + aux2
+                output += sample
 
-           self.write_to_scheduler(a) #DEPOIS ENVIA UMA A
+           output = output[:-6] + "\\n" + "\""
+           ref_arquivo.write(output) 
+	 	
+	
+           self.write_to_scheduler(config_action) #DEPOIS ENVIA UMA A
            self.state = self.read_from_scheduler()
 
 
         return self.state, reward, done, {}
-
 
 
     def get_immediate_reward(self):
@@ -198,7 +205,7 @@ class EnviromentExample(Env):
         #return self.immediate_reward #or return 0
 
     def get_final_reward(self):
-        for i in range(0,10):
+        for i in range(0,len(map_reward)):
            if self.state[index_exec_time]  >=  self.upper_bound - ((i+1)*self.interval):
              return map_reward[i]
         #value = self.exec_time_1l/self.state[index_exec_time];
@@ -222,11 +229,23 @@ class EnviromentExample(Env):
         pass
 
     def read_from_scheduler(self):
-        pmu1_str, pmu2_str, pmu3_str, pmu4_str, cpu_migration_str, context_switch_str, cpu_usage_little_str, cpu_usage_big_str, state_str, exec_time_str = input().split() #RECEBIMENTO DO ESTADO DA MAIN
-        pmu1 = float.fromhex(pmu1_str)
-        pmu2 = float.fromhex(pmu2_str)
-        pmu3 = float.fromhex(pmu3_str)
-        pmu4 = float.fromhex(pmu4_str)
+        L_pmu1_str, L_pmu2_str, L_pmu3_str, L_pmu4_str, L_pmu5_str, \
+	B_pmu1_str, B_pmu2_str, B_pmu3_str, B_pmu4_str, B_pmu5_str,B_pmu6_str, B_pmu7_str, \
+	cpu_migration_str, context_switch_str, cpu_usage_little_str, cpu_usage_big_str, state_str, exec_time_str = input().split() #RECEBIMENTO DO ESTADO DA MAIN
+        
+	L_pmu1 = float.fromhex(L_pmu1_str)
+        L_pmu2 = float.fromhex(L_pmu2_str)
+        L_pmu3 = float.fromhex(L_pmu3_str)
+        L_pmu4 = float.fromhex(L_pmu4_str)
+	L_pmu5 = float.fromhex(L_pmu5_str)
+	
+	B_pmu1 = float.fromhex(B_pmu1_str)
+        B_pmu2 = float.fromhex(B_pmu2_str)
+        B_pmu3 = float.fromhex(B_pmu3_str)
+        B_pmu4 = float.fromhex(B_pmu4_str)
+	B_pmu5 = float.fromhex(B_pmu5_str)
+        B_pmu6 = float.fromhex(B_pmu6_str)
+	B_pmu7 = float.fromhex(B_pmu7_str)
 
         cpu_migration = float.fromhex(cpu_migration_str)
         context_switch = float.fromhex(context_switch_str)
@@ -249,7 +268,9 @@ class EnviromentExample(Env):
         exec_time = float(exec_time_str)
 
 
-        return np.array([pmu1, pmu2, pmu3, pmu4, cpu_migration, context_switch, cpu_usage_little, cpu_usage_big, num_little, num_big, exec_time])
+        return np.array([L_pmu1, L_pmu2, L_pmu3, L_pmu4, L_pm5, \
+			 B_pmu1, B_pmu2, B_pmu3, B_pmu4, B_pmu5,B_pmu6, B_pmu7, \
+			 cpu_migration, context_switch, cpu_usage_little, cpu_usage_big, num_little, num_big, exec_time])
 
     def write_to_scheduler(self, action):
         print (action)
