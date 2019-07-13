@@ -13,8 +13,8 @@
 #include "time.hpp"
 #include "states.hpp" 
 
-#define FLAG_ONLY_PARALLEL_REGION 0
-
+#define FLAG_ONLY_PARALLEL_REGION 1
+#define NUM_EPISODES 50
 
 #ifndef SCHEDULER_TYPE
 #   error Please define SCHEDULER_TYPE
@@ -40,6 +40,9 @@ static uint64_t application_start_time = 0;
 static State current_state;
 static int num_time_steps = 0;
 static int flag_update_schedule;
+
+
+static void update_scheduler_to_serial_region();
 
 
 void get_cpu_usage(double *cpu_usage)
@@ -311,6 +314,7 @@ static bool spawn_application(char* argv[])
         ::application_pid = pid;
         ::application_start_time = get_time();
         ::current_state = STATE_4b;
+        update_scheduler_to_serial_region();
         return true;
     }
 }
@@ -318,7 +322,8 @@ static bool spawn_application(char* argv[])
 
 static void update_scheduler_to_serial_region()
 {
-    if(::application_pid != -1 && current_state != STATE_4b)
+//    if(::application_pid != -1 && current_state != STATE_4b)
+    if(::application_pid != -1)
     {
         char buffer[512];
         auto cfg = configs[STATE_4b];
@@ -346,42 +351,42 @@ static void update_scheduler()
     get_cpu_usage(cpu_usage);
 
 
-    uint64_t l_total_pmu_1 = 0;
-    uint64_t l_total_pmu_2 = 0;
-    uint64_t l_total_pmu_3 = 0;
-    uint64_t l_total_pmu_4 = 0;
-    uint64_t l_total_pmu_5 = 0;
+    double l_total_pmu_1 = 0;
+    double l_total_pmu_2 = 0;
+    double l_total_pmu_3 = 0;
+    double l_total_pmu_4 = 0;
+    double l_total_pmu_5 = 0;
 
-    uint64_t b_total_pmu_1 = 0;
-    uint64_t b_total_pmu_2 = 0;
-    uint64_t b_total_pmu_3 = 0;
-    uint64_t b_total_pmu_4 = 0;
-    uint64_t b_total_pmu_5 = 0;
-    uint64_t b_total_pmu_6 = 0;
-    uint64_t b_total_pmu_7 = 0;
+    double b_total_pmu_1 = 0;
+    double b_total_pmu_2 = 0;
+    double b_total_pmu_3 = 0;
+    double b_total_pmu_4 = 0;
+    double b_total_pmu_5 = 0;
+    double b_total_pmu_6 = 0;
+    double b_total_pmu_7 = 0;
 
 
     for(int cpu = START_INDEX_LITTLE; cpu <= END_INDEX_LITTLE; ++cpu)
     {
         const auto hw_data = perf_consume_hw(cpu);
-        l_total_pmu_1 += hw_data.pmu_1;   //cycles
-        l_total_pmu_2 += hw_data.pmu_2;   //instructions
-        l_total_pmu_3 += hw_data.pmu_3;   //cache_misses
-        l_total_pmu_4 += hw_data.pmu_4;   //bus access
-        l_total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
+        l_total_pmu_1 += (double)hw_data.pmu_1;   //cycles
+        l_total_pmu_2 += (double)hw_data.pmu_2;   //instructions
+        l_total_pmu_3 += (double)hw_data.pmu_3;   //cache_misses
+        l_total_pmu_4 += (double)hw_data.pmu_4;   //bus access
+        l_total_pmu_5 += (double)hw_data.pmu_5;   //l2 cache refill
 
     }
 
     for(int cpu = START_INDEX_BIG; cpu < END_INDEX_BIG; ++cpu)
     {
         const auto hw_data = perf_consume_hw(cpu);
-        b_total_pmu_1 += hw_data.pmu_1;   //cycles
-        b_total_pmu_2 += hw_data.pmu_2;   //instructions
-        b_total_pmu_3 += hw_data.pmu_3;   //cache_misses
-        b_total_pmu_4 += hw_data.pmu_4;   //bus access
-        b_total_pmu_5 += hw_data.pmu_5;   //l2 cache refill
-        b_total_pmu_6 += hw_data.pmu_6;   //bus access
-        b_total_pmu_7 += hw_data.pmu_7;   //l2 cache refill
+        b_total_pmu_1 += (double)hw_data.pmu_1;   //cycles
+        b_total_pmu_2 += (double)hw_data.pmu_2;   //instructions
+        b_total_pmu_3 += (double)hw_data.pmu_3;   //cache_misses
+        b_total_pmu_4 += (double)hw_data.pmu_4;   //bus access
+        b_total_pmu_5 += (double)hw_data.pmu_5;   //l2 cache refill
+        b_total_pmu_6 += (double)hw_data.pmu_6;   //bus access
+        b_total_pmu_7 += (double)hw_data.pmu_7;   //l2 cache refill
 
     }
 
@@ -392,8 +397,8 @@ static void update_scheduler()
     for(int cpu = 0, max_cpu = perf_nprocs(); cpu < max_cpu; ++cpu)
     {
         const auto sw_data = perf_consume_sw(cpu);
-        total_cpu_migration += sw_data.cpu_migrations;
-        total_context_switch += sw_data.context_switches;
+        total_cpu_migration += (double)sw_data.cpu_migrations;
+        total_context_switch += (double)sw_data.context_switches;
     }
 
     const uint64_t elapsed_time = to_millis(get_time() - ::application_start_time);
@@ -401,10 +406,18 @@ static void update_scheduler()
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
 
+    fprintf(stderr,"%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf," \
+                   "%.2lf,%.2lf,%.2lf,%.2lf\n", \
+                   l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
+                   b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
+                   total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
+
+
+
     fprintf(collect_stream, "%" PRIu64 \
-                            ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 \
-                            ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 \
-                            ",%.2lf,%.2lf,%.2lf,%.2lf\n" ,
+                            ",%lf,%lf,%lf,%lf,%lf," \
+                            "%lf,%lf,%lf,%lf,%lf,%lf,%lf," \
+                            "%.2lf,%.2lf,%.2lf,%.2lf\n" ,
                             elapsed_time, \
                             l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
                             b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
@@ -452,19 +465,20 @@ static void update_scheduler()
 void sig_handler(int signo)
 {
     if (signo == SIGUSR1){
-       //fprintf(stderr, "received SIGUSR1\n");
+       fprintf(stderr, "received SIGUSR1\n");
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
         if(FLAG_ONLY_PARALLEL_REGION == 1){
              update_scheduler();
              ::flag_update_schedule = 0;
         }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
+        usleep(600000);
         update_scheduler();
 #endif
 
     }
     else if (signo == SIGUSR2){
-       //fprintf(stderr, "received SIGUSR2\n"); 
+       fprintf(stderr, "received SIGUSR2\n"); 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
        if(FLAG_ONLY_PARALLEL_REGION == 1){
           ::flag_update_schedule = 1;
@@ -505,7 +519,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
-    const int num_episodes = 3;
+    const int num_episodes = NUM_EPISODES;
     char cmd[50];
     sprintf(cmd, "python3 %s", argv[1]);
 
@@ -556,7 +570,8 @@ int main(int argc, char* argv[])
                 {
                      exec_time = to_millis(get_time() - ::application_start_time);
                      send_to_scheduler("%a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %d %f", \
-                                        0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0, -1, exec_time);
+                                       0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-1,exec_time);
+
                      recv_from_scheduler("%d", &state_index_reply);
                      //create_time_file(exec_time);
                 }
@@ -574,10 +589,10 @@ int main(int argc, char* argv[])
         perf_shutdown();
 
         #if SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
-              //create_time_file(to_millis(get_time() - ::application_start_time));
+              create_time_file(to_millis(get_time() - ::application_start_time));
         #endif
 
-        //usleep(1000000000); //only to clear anything in cpu
+        usleep(3000000); //only to clear anything in cpu
         //fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }
 
