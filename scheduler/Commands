@@ -1,0 +1,9 @@
+[EXEMPLO DE COMANDO PARA O MEABO]
+sudo taskset -a -c 0-7 ./bin/scheduler-collect $HOME/workloads/meabo/./meabo.armv7 -C 8 -r 8192 -c 8192 -s 524288 -l 1048576 -p 524288 -R 1048576 -P 32
+
+
+Obs: É Você pode definir se a coleta será apenas em regiões paralelas ou na aplicação completa. É importante destacar que caso seja apenas em regiões paralelas você deve antes instrumentar portanto o código usando chamadas do sistema via kill.
+
+[EXEMPLO DE COMANDO PARA A APLICAÇÃO FIB]
+sudo taskset -a -c 0-7 ./bin/scheduler-collect $HOME/workloads/bots/bin/./fib.gcc.omp-tasks -n 25
+
