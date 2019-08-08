@@ -41,6 +41,14 @@ paste 4b4l 4b 4l | awk '{printf "%.6f,%.6f\n", $1/$2, $1/$3}' > speedup_4b4l
 rm 4b4l 4b4l_1 4b4l_2 4b 4l 
 
 
+#If you want see some pattern 
+#cat 4b_bots*/consolidated-pmc-big.csv | sed '/^l1_inst_cache/ d' > all_app_continue_pmcs_4b.csv
+#cat 4l_bots*/consolidated-pmc-little.csv | sed '/^inst_fetch_refill/ d' > all_app_continue_pmcs_4l.csv
+
+
+
+
+
 #Calculate dataset for 4little
 #Replace the last column with the speedup
 
