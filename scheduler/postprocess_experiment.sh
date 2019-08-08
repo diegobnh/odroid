@@ -6,7 +6,7 @@ if [ $1 = "little" ]; then
 
 	[ -e $OUTPUT_FILE_NAME ] && rm $OUTPUT_FILE_NAME
 
-	files=`ls *.csv`
+	files=`ls *.csv` #cada csv possui 4 pmcs
 	for file in $files ;
 	do 
            #obtém só o nome do folder sem a barra
@@ -137,7 +137,7 @@ else
 fi
 
 
-
+#cada aplicação terá um exec_time.average
 cat times.txt | tr "." "," | datamash mean 1 | tr "," "." > exec_time.average
 
 
