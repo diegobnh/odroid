@@ -7,3 +7,77 @@ Obs: É Você pode definir se a coleta será apenas em regiões paralelas ou na 
 [EXEMPLO DE COMANDO PARA A APLICAÇÃO FIB]
 sudo taskset -a -c 0-7 ./bin/scheduler-collect $HOME/workloads/bots/bin/./fib.gcc.omp-tasks -n 25
 
+
+----------------------------------------------------------
+
+1º Definir o governor em performance
+2º Definir a coleta acontecer em todo o código(FLAG_ONLY_PARALLEL_REGION) com APENAS coleta no little(define PMCS_A7_ONLY), comentar a chamada
+"update_scheduler_to_serial_region()" em todas as partes do código!
+3º Executar o MAKE
+4º Após a execução de cada aplicação, execat-se o script com o nome para o ".tar" (ex: ./script.sh.sh little_bots_fib)
+
+
+sudo su (virar root)
+
+
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fib.gcc.omp-tasks-tied -o 0 -n 36
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/nqueens.gcc.omp-tasks-tied -n 13
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/health.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/health/medium.input
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/floorplan.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/floorplan/input.20
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fft.gcc.omp-tasks-tied -o 0 -n 10000000
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sort.gcc.omp-tasks-tied -o 0 -n 100000000
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sparselu.gcc.for-omp-tasks-tied -o 0 -n 100 -m 100
+ taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/strassen.gcc.omp-tasks-tied -o 0 -n 4096
+
+taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fib.gcc.omp-tasks-tied -o 0 -n 36; ./script.sh 4l_bots_fib;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/nqueens.gcc.omp-tasks-tied -n 13; ./script.sh 4l_bots_nqueens;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/health.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/health/medium.input; ./script.sh 4l_bots_health;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/floorplan.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/floorplan/input.20; ./script.sh 4l_bots_floorplan;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fft.gcc.omp-tasks-tied -o 0 -n 10000000; ./script.sh 4l_bots_fft;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sort.gcc.omp-tasks-tied -o 0 -n 100000000; ./script.sh 4l_bots_sort;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sparselu.gcc.for-omp-tasks-tied -o 0 -n 100 -m 100; ./script.sh 4l_bots_sparselu;  taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/strassen.gcc.omp-tasks-tied -o 0 -n 4096; ./script.sh 4l_bots_strassen
+
+
+
+5º Coletar agora no big, repete os passos 2º e 3º
+
+
+taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fib.gcc.omp-tasks-tied -o 0 -n 36; ./script.sh 4b_bots_fib;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/nqueens.gcc.omp-tasks-tied -n 13; ./script.sh 4b_bots_nqueens;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/health.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/health/medium.input; ./script.sh 4b_bots_health;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/floorplan.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/floorplan/input.20; ./script.sh 4b_bots_floorplan;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fft.gcc.omp-tasks-tied -o 0 -n 10000000; ./script.sh 4b_bots_fft;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sort.gcc.omp-tasks-tied -o 0 -n 100000000; ./script.sh 4b_bots_sort;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sparselu.gcc.for-omp-tasks-tied -o 0 -n 100 -m 100; ./script.sh 4b_bots_sparselu;  taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/strassen.gcc.omp-tasks-tied -o 0 -n 4096; ./script.sh 4b_bots_strassen
+
+
+
+
+taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fib.gcc.omp-tasks-tied -o 0 -n 36; ./script.sh 4b4l_A15_bots_fib;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/nqueens.gcc.omp-tasks-tied -n 13; ./script.sh 4b4l_A15_bots_nqueens;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/health.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/health/medium.input; ./script.sh 4b4l_A15_bots_health;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/floorplan.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/floorplan/input.20; ./script.sh 4b4l_A15_bots_floorplan;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fft.gcc.omp-tasks-tied -o 0 -n 10000000; ./script.sh 4b4l_A15_bots_fft;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sort.gcc.omp-tasks-tied -o 0 -n 100000000; ./script.sh 4b4l_A15_bots_sort;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sparselu.gcc.for-omp-tasks-tied -o 0 -n 100 -m 100; ./script.sh 4b4l_A15_bots_sparselu;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/strassen.gcc.omp-tasks-tied -o 0 -n 4096; ./script.sh 4b4l_A15_bots_strassen
+
+
+taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fib.gcc.omp-tasks-tied -o 0 -n 36; ./script.sh 4b4l_A7_bots_fib;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/nqueens.gcc.omp-tasks-tied -n 13; ./script.sh 4b4l_A7_bots_nqueens;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/health.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/health/medium.input; ./script.sh 4b4l_A7_bots_health;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/floorplan.gcc.omp-tasks-tied -o 0 -f /home/odroid/workloads/bots/inputs/floorplan/input.20; ./script.sh 4b4l_A7_bots_floorplan;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fft.gcc.omp-tasks-tied -o 0 -n 10000000; ./script.sh 4b4l_A7_bots_fft;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sort.gcc.omp-tasks-tied -o 0 -n 100000000; ./script.sh 4b4l_A7_bots_sort;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/sparselu.gcc.for-omp-tasks-tied -o 0 -n 100 -m 100; ./script.sh 4b4l_A7_bots_sparselu;  taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/strassen.gcc.omp-tasks-tied -o 0 -n 4096; ./script.sh 4b4l_A7_bots_strassen
+
+
+
+Quando for executar o meabo precisa desfazer algumas coisas feitas aí acima.
+
+As aplicações do bots não é analisada apenas região paralela porque ele já começa fazendo a computação, a região serial é mínima.
+
+taskset -a -c 4-7 ./bin/scheduler-collect $HOME/workloads/meabo/./meabo.armv7 -C 4 -r 8192 -c 8192 -s 524288 -l 1048576 -p 524288 -R 1048576 -P 1
+
+PHASE 1 - empatam
+PHASE 2 - little 25 , big 24, 4b4l 12.9
+PHASE 3 - empatam
+PHASE 4 - little 7.3 , big 7.0, 4b4l 4
+PHASE 5 - little 32, big 30, 4b4l 17.8
+PHASE 6 - little 1.27, big 1.23
+PHASE 7 - little 50.8, big 50.6, 4b4l 52
+PHASE 8 - empatam(12)    4b4l 6.7
+PHASE 9 - empatam    4b4l 3.9
+PHASE 10 - LITTLE 24, BIG 23.7, 4b4l 13
+----------------------------------------------------
+
+
+sed 1d consolidated-pmc-big.csv | tr "," "\t" | tr "." "," | datamash mean 1-66 | tr "," "." | tr "\t" "," > consolidated-pmc-big.csv.average
+
+--------------------------------------------------
+
+Testar depois um preditor com aplicações não vistas
+
+4b4l é melhor
+
+time sudo taskset -a -c 0-7 ./whetstone 36000
+time sudo taskset -a -c 0-7 ./canneal 8 20000 4000 50000.nets 2048
+time sudo taskset -a -c 0-7 ./fluidanimate 8 500 in_35K.fluid out.fluid  (empatado com 4big)
+time sudo taskset -a -c 0-7 /home/odroid/workloads/Workloads-ARMv7/parsec-armv7/parsec-3.0/pkgs/apps/swaptions/inst/arm-linux.gcc/bin/./swaptions -ns 256 -sm 24000 -nt 8
+time sudo taskset -a -c 0-7 /home/odroid/workloads/Workloads-ARMv7/parsec-armv7/parsec-3.0/pkgs/kernels/streamcluster/inst/arm-linux.gcc/bin/./streamcluster 10 20 32 65536 65536 1000 none output.txt 8
+
