@@ -48,6 +48,18 @@ taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/bots/bin/fib.gc
 
 
 
+
+#rodinia
+taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/heartwall/./heartwall /home/odroid/workloads/rodinia_3.1/data/heartwall/test.avi 104 4
+taskset -a -c 0-3 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/lavaMD/./lavaMD -cores 4 -boxes1d 30 
+taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/heartwall/./heartwall /home/odroid/workloads/rodinia_3.1/data/heartwall/test.avi 104 8
+taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/lavaMD/./lavaMD -cores 8 -boxes1d 30 
+taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/heartwall/./heartwall /home/odroid/workloads/rodinia_3.1/data/heartwall/test.avi 104 4
+taskset -a -c 0-7 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/heartwall/./heartwall /home/odroid/workloads/rodinia_3.1/data/heartwall/test.avi 104 8
+taskset -a -c 4-7 ./bin/scheduler-collect /home/odroid/workloads/rodinia_3.1/openmp/lavaMD/./lavaMD -cores 4 -boxes1d 30 
+   
+
+
 Quando for executar o meabo precisa desfazer algumas coisas feitas aí acima.
 
 As aplicações do bots não é analisada apenas região paralela porque ele já começa fazendo a computação, a região serial é mínima.
