@@ -13,8 +13,8 @@
 #include "time.hpp"
 #include "states.hpp" 
 
-#define FLAG_ONLY_PARALLEL_REGION 1
-#define NUM_EPISODES 50
+#define FLAG_ONLY_PARALLEL_REGION 0
+#define NUM_EPISODES 1000
 
 #ifndef SCHEDULER_TYPE
 #   error Please define SCHEDULER_TYPE
@@ -219,8 +219,45 @@ static void cleanup()
 
 static bool create_logging_file()
 {
+
+
+#ifdef PMCS_A15_ONLY
+     char pmcs[10][35] ={  "0x01_0x02_0x03_0x04_0x05_0x08",
+                           "0x09_0x10_0x12_0x13_0x14_0x15",
+                           "0x16_0x17_0x18_0x19_0x1B_0x1D",
+                           "0x40_0x41_0x42_0x43_0x46_0x47",
+                           "0x48_0x4C_0x4D_0x50_0x51_0x52",
+                           "0x53_0x56_0x58_0x60_0x61_0x62",
+                           "0x64_0x66_0x67_0x68_0x69_0x6A",
+                           "0x6C_0x6D_0x6E_0x70_0x71_0x72",
+                           "0x73_0x74_0x75_0x76_0x78_0x79",
+                           "0x7A_0x7E_0x00_0x00_0x00_0x00"};
+
+#elif defined PMCS_A7_ONLY
+    char pmcs[9][35] ={ "0x01_0x02_0x03_0x04",
+                        "0x05_0x06_0x07_0x08",
+                        "0x09_0x0A_0x0C_0x0D",
+                        "0x0E_0x0F_0x10_0x12",
+                        "0x13_0x14_0x15_0x16",
+                        "0x17_0x18_0x19_0x1D",
+                        "0x60_0x61_0xC0_0xC1",
+                        "0xC4_0xC5_0xC6_0xC9",
+                        "0xCA_0x00_0x00_0x00"};
+#endif
+
+    static int index_pmc=0;
     char filename[PATH_MAX];
-    sprintf(filename, "scheduler_%d.csv", getpid());
+
+#if defined PMCS_A7_ONLY || defined PMCS_A15_ONLY 
+    if(index_pmc >=0 && index_pmc<=10){
+       sprintf(filename, "%s.csv", pmcs[index_pmc]);
+       index_pmc ++;
+    }
+#else
+    sprintf(filename, "scheduler_%d.csv", application_pid); //getpid() get fathers'pid  
+#endif
+
+
     collect_stream = fopen(filename, "w");
     if(!collect_stream)
     {
@@ -228,7 +265,7 @@ static bool create_logging_file()
         return false;
     }
     fprintf(stderr, "scheduler: collecting to file %s\n", filename);
-    fprintf(collect_stream, "#ElapsedTime,L_pmu1,L_pmu2,L_pmu3,L_pmu4,L_pmu5,B_pmu1,B_pmu2,B_pmu3,B_pmu4,B_pmu5,B_pmu6,B_pmu7,CpuMigration,ContextSwitch,LittleUtilization,BigUtilization\n") ;
+    //fprintf(collect_stream, "#ElapsedTime,L_cycles,L_pmu1,L_pmu2,L_pmu3,L_pmu4,B_cycles,B_pmu1,B_pmu2,B_pmu3,B_pmu4,B_pmu5,B_pmu6,CpuMigration,ContextSwitch,LittleUtilization,BigUtilization\n") ;
 
     return true;
 }
@@ -314,7 +351,7 @@ static bool spawn_application(char* argv[])
         ::application_pid = pid;
         ::application_start_time = get_time();
         ::current_state = STATE_4b;
-        update_scheduler_to_serial_region();
+        //update_scheduler_to_serial_region();
         return true;
     }
 }
@@ -406,13 +443,41 @@ static void update_scheduler()
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
 
-    fprintf(stderr,"%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf," \
+#ifdef PMCS_A15_ONLY
+    /* fprintf(stderr,"%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf," \
+                   "%.2lf,%.2lf,%.2lf,%.2lf\n", \
+                   b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
+                   total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
+    */
+    fprintf(collect_stream, "%" PRIu64 \
+                            ",%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf," \
+                            "%.2lf,%.2lf,%.2lf,%.2lf\n" ,
+                            elapsed_time, \
+                            b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
+                            total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
+
+
+#elif defined PMCS_A7_ONLY    
+    /*fprintf(stderr,"%.2lf,%.2lf,%.2lf,%.2lf,%.2lf," \
+                   "%.2lf,%.2lf,%.2lf,%.2lf\n", \
+                   l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
+                   total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
+    */
+
+    fprintf(collect_stream, "%" PRIu64 \
+                            ",%.2lf,%.2lf,%.2lf,%.2lf,%.2lf," \
+                            "%.2lf,%.2lf,%.2lf,%.2lf\n" ,
+                            elapsed_time, \
+                            l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
+                            total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
+
+
+#else
+    fprintf(stderr,"%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%.2lf," \
                    "%.2lf,%.2lf,%.2lf,%.2lf\n", \
                    l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
                    b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
                    total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
-
-
 
     fprintf(collect_stream, "%" PRIu64 \
                             ",%lf,%lf,%lf,%lf,%lf," \
@@ -422,6 +487,9 @@ static void update_scheduler()
                             l_total_pmu_1, l_total_pmu_2, l_total_pmu_3, l_total_pmu_4, l_total_pmu_5, \
                             b_total_pmu_1, b_total_pmu_2, b_total_pmu_3, b_total_pmu_4, b_total_pmu_5, b_total_pmu_6, b_total_pmu_7, \
                             total_cpu_migration, total_context_switch, cpu_usage[0], cpu_usage[1]);
+#endif
+
+
 
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT  
     int state_index_reply;
@@ -459,6 +527,7 @@ static void update_scheduler()
 
         current_state = next_state;
     }
+    
 }
 
 
@@ -484,7 +553,7 @@ void sig_handler(int signo)
           ::flag_update_schedule = 1;
           fprintf(collect_stream, "\n"); 
        }
-       update_scheduler_to_serial_region();
+       //update_scheduler_to_serial_region();
 #endif
 
     }
@@ -505,12 +574,15 @@ int main(int argc, char* argv[])
     }
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
-    const int num_episodes = 1; // Collect should run a single episode
-    if(!create_logging_file())
-    {
-        cleanup();
-        return 1;
-    }
+
+#if defined PMCS_A15_ONLY
+    const int num_episodes = 10;//number of time to collect all pmcs from big core
+#elif defined PMCS_A7_ONLY
+    const int num_episodes = 9;//number of time to collect all pmcs from little core
+#else
+    const int num_episodes = 1;
+#endif
+
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR
     const int num_episodes = 1; // Predictor should run a single episode
     if(!spawn_agent("python3 ./predictor.py"))
@@ -532,12 +604,19 @@ int main(int argc, char* argv[])
     sleep(25);//time to wait for the agent to load their libraries and be ready to make decisions.
     fprintf(stderr, "Total of episodios: %d\n", num_episodes);
 #endif
+
+
+
     for(int curr_episode = 0; curr_episode < num_episodes; ++curr_episode)
     {
-
         perf_init();
 
 #if SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
+        if(!create_logging_file())
+        {
+            cleanup();
+            return 1;
+        }
         if(!spawn_application(&argv[1]))
 #elif SCHEDULER_TYPE == SCHEDULER_TYPE_AGENT
         if(!spawn_application(&argv[2]))
@@ -551,7 +630,6 @@ int main(int argc, char* argv[])
 
         while(::application_pid != -1)
         {
-
             int pid = waitpid(::application_pid, NULL, WNOHANG);
 
             if(pid == -1)
@@ -588,12 +666,13 @@ int main(int argc, char* argv[])
 
         perf_shutdown();
 
+
         #if SCHEDULER_TYPE == SCHEDULER_TYPE_PREDICTOR || SCHEDULER_TYPE == SCHEDULER_TYPE_COLLECT
               create_time_file(to_millis(get_time() - ::application_start_time));
         #endif
 
-        usleep(3000000); //only to clear anything in cpu
-        //fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
+        usleep(5000000); //only to clear anything in cpu - 2 seconds
+        fprintf(stderr, "scheduler: episode %d finished\n", curr_episode + 1);
     }
 
     cleanup();

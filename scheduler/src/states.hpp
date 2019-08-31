@@ -1,12 +1,6 @@
 #ifndef STATES_H_
 #define STATES_H_
 
-#define START_INDEX_LITTLE 0
-#define END_INDEX_LITTLE 3
-#define START_INDEX_BIG 4
-#define END_INDEX_BIG 7
-
-
 enum State
 {
     STATE_1l,      //index 0

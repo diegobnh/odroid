@@ -1,6 +1,17 @@
 #pragma once
 #include <cstdint>
 
+
+#define START_INDEX_LITTLE 0
+#define END_INDEX_LITTLE 3
+#define START_INDEX_BIG 4
+#define END_INDEX_BIG 7
+
+//only one at a time may be enabled
+#define PMCS_A15_ONLY
+//#define PMCS_A7_ONLY
+
+
 /// Software hardware counters.
 struct PerfSoftwareData
 {
@@ -42,3 +53,5 @@ extern auto perf_consume_hw(int cpu) -> PerfHardwareData;
 /// A consume operation obtains counters as if they were reset during
 /// the previous consume operation.
 extern auto perf_consume_sw(int cpu) -> PerfSoftwareData;
+
+
